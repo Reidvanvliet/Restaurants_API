@@ -1,8 +1,15 @@
 const jwt = require('jsonwebtoken');
 
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+// Generate JWT token with restaurant context
+const generateToken = (userId, restaurantId = null) => {
+  const payload = { userId };
+  
+  // Include restaurant context if provided (for restaurant-scoped users)
+  if (restaurantId) {
+    payload.restaurantId = restaurantId;
+  }
+  
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
 // Validate email format

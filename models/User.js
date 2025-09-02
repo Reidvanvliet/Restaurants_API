@@ -63,6 +63,11 @@ module.exports = (sequelize) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false, // Regular users are not admins by default
       field: 'is_admin'
+    },
+    role: {
+      type: DataTypes.ENUM('user', 'restaurant_admin', 'super_admin'),
+      defaultValue: 'user', // Regular users by default
+      allowNull: false
     }
   }, {
     tableName: 'users', // Database table name
@@ -101,9 +106,26 @@ module.exports = (sequelize) => {
 
   // Return user data without sensitive information (for API responses)
   User.prototype.toSafeObject = function() {
-    const { id, email, firstName, lastName, phone, address, isAdmin, createdAt, updatedAt } = this;
-    return { id, email, firstName, lastName, phone, address, isAdmin, createdAt, updatedAt };
+    const { id, email, firstName, lastName, phone, address, isAdmin, role, restaurantId, createdAt, updatedAt } = this;
+    return { id, email, firstName, lastName, phone, address, isAdmin, role, restaurantId, createdAt, updatedAt };
     // Note: password and thirdPartyId are excluded for security
+  };
+
+  // Check if user is super admin (can manage all restaurants)
+  User.prototype.isSuperAdmin = function() {
+    return this.role === 'super_admin';
+  };
+
+  // Check if user is restaurant admin (can manage their restaurant)
+  User.prototype.isRestaurantAdmin = function() {
+    return this.role === 'restaurant_admin' || this.role === 'super_admin';
+  };
+
+  // Check if user can manage a specific restaurant
+  User.prototype.canManageRestaurant = function(restaurantId) {
+    if (this.role === 'super_admin') return true;
+    if (this.role === 'restaurant_admin' && this.restaurantId === restaurantId) return true;
+    return false;
   };
 
   return User;

@@ -3,7 +3,7 @@
 
 const express = require('express');
 const { Restaurant, User, MenuItem, Order, sequelize } = require('../config/database'); // Added sequelize import
-const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware, superAdminMiddleware, restaurantAdminMiddleware } = require('../middleware/auth');
 const { addRestaurantToCache, clearRestaurantCache, getRestaurantContextHealth } = require('../middleware/restaurantContext');
 const { Op } = require('sequelize');
 const router = express.Router();
@@ -11,7 +11,7 @@ const router = express.Router();
 // @route   GET /api/restaurants
 // @desc    Get all restaurants (super admin only)
 // @access  Private (Super Admin)
-router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/', authMiddleware, superAdminMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 20, search, active } = req.query;
     
@@ -86,8 +86,8 @@ router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
 
 // @route   GET /api/restaurants/:id
 // @desc    Get single restaurant details
-// @access  Private (Admin)
-router.get('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.get('/:id', authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -132,7 +132,7 @@ router.get('/:id', authMiddleware, adminMiddleware, async (req, res) => {
 // @route   POST /api/restaurants
 // @desc    Create new restaurant
 // @access  Private (Super Admin)
-router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
+router.post('/', authMiddleware, superAdminMiddleware, async (req, res) => {
   try {
     const {
       name,
@@ -207,8 +207,8 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
 
 // @route   PUT /api/restaurants/:id
 // @desc    Update restaurant
-// @access  Private (Super Admin)
-router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.put('/:id', authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -284,7 +284,7 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
 // @route   DELETE /api/restaurants/:id
 // @desc    Delete/deactivate restaurant
 // @access  Private (Super Admin)
-router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, superAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { force = false } = req.query;

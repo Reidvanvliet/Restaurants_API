@@ -1,15 +1,21 @@
 // AUTHENTICATION CONTROLLER - Handles user registration, login, and OAuth authentication
 // This controller manages user authentication for the restaurant ordering system
 
-const { User } = require('../config/database');
+const { User, Restaurant } = require('../config/database'); // Added Restaurant model
 const { Op } = require('sequelize'); // Sequelize operators for database queries
 const { generateToken, validateRequiredFields, isValidPassword } = require('../utils/auth');
 const { sendSuccess, sendError, sendServerError, sendValidationError, sendUnauthorized } = require('../utils/responses');
 const { verifyGoogleToken, verifyFacebookToken, transformOAuthUser } = require('../utils/oauth');
+const { requireRestaurantContext } = require('../middleware/restaurantContext'); // Multi-tenant support
 
-// REGISTER NEW USER - Creates account with email/password
+// REGISTER NEW USER - Creates account with email/password for specific restaurant
 const signup = async (req, res) => {
   try {
+    // Restaurant context is required for user registration
+    if (!req.restaurant || !req.restaurantId) {
+      return sendError(res, 'Restaurant context required for user registration. Please access via restaurant subdomain (e.g., goldchopsticks.yourapi.com)');
+    }
+
     // Extract user data from request body
     const { email, password, firstName, lastName, phone, address } = req.body;
     const requiredFields = ['email', 'password', 'firstName', 'lastName', 'phone', 'address'];
@@ -25,19 +31,26 @@ const signup = async (req, res) => {
       return sendError(res, 'Password must be at least 6 characters long');
     }
 
-    // Check if user already exists with this email
+    // Check if user already exists with this email in ANY restaurant (email should be globally unique)
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
-      return sendError(res, 'User with this email already exists');
+      if (existingUser.restaurantId === req.restaurantId) {
+        return sendError(res, 'User with this email already exists in this restaurant');
+      } else {
+        // User exists in different restaurant
+        const otherRestaurant = await Restaurant.findByPk(existingUser.restaurantId);
+        return sendError(res, `User with this email is already registered with ${otherRestaurant?.name || 'another restaurant'}`);
+      }
     }
 
-    // Create new user (password will be automatically hashed by User model hooks)
+    // Create new user for current restaurant (password will be automatically hashed by User model hooks)
     const user = await User.create({
+      restaurantId: req.restaurantId, // Assign to current restaurant
       email, password, firstName, lastName, phone, address
     });
 
-    // Generate JWT token for immediate login
-    const token = generateToken(user.id);
+    // Generate JWT token with restaurant context for immediate login
+    const token = generateToken(user.id, req.restaurantId);
     
     // Send success response with user data and token
     sendSuccess(res, {
@@ -48,15 +61,23 @@ const signup = async (req, res) => {
       phone: user.phone,
       address: user.address,
       isAdmin: user.isAdmin,
+      restaurantId: user.restaurantId,
+      restaurant: {
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
+      },
       token
     }, 201);
+
+    console.log(`New user registered: ${email} for ${req.restaurant.name}`);
 
   } catch (error) {
     sendServerError(res, error, 'Server error during registration');
   }
 };
 
-// USER LOGIN - Authenticates existing users with email/password
+// USER LOGIN - Authenticates existing users with email/password for specific restaurant
 const signin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -66,20 +87,45 @@ const signin = async (req, res) => {
       return sendError(res, 'Email and password are required');
     }
 
-    // Find user by email
-    const user = await User.findOne({ where: { email } });
+    // Restaurant context is required for user login
+    if (!req.restaurant || !req.restaurantId) {
+      return sendError(res, 'Restaurant context required for login. Please access via restaurant subdomain (e.g., goldchopsticks.yourapi.com)');
+    }
+
+    // Find user by email and restaurant
+    const user = await User.findOne({ 
+      where: { 
+        email,
+        restaurantId: req.restaurantId // User must belong to current restaurant
+      },
+      include: [{
+        model: Restaurant,
+        as: 'restaurant',
+        attributes: ['id', 'name', 'slug']
+      }]
+    });
+
     if (!user) {
-      return sendUnauthorized(res); // Don't reveal if email exists for security
+      // Don't reveal if email exists for security, but log for debugging
+      console.log(`Login attempt failed: ${email} not found in ${req.restaurant.name}`);
+      return sendUnauthorized(res, 'Invalid email or password');
     }
 
     // Verify password using bcrypt comparison
     const isMatch = await user.validatePassword(password);
     if (!isMatch) {
-      return sendUnauthorized(res); // Invalid password
+      console.log(`Login attempt failed: Invalid password for ${email} in ${req.restaurant.name}`);
+      return sendUnauthorized(res, 'Invalid email or password');
     }
 
-    // Generate JWT token for authenticated session
-    const token = generateToken(user.id);
+    // Double-check user belongs to current restaurant (extra security)
+    if (user.restaurantId !== req.restaurantId) {
+      console.log(`Security warning: User ${email} tried to access ${req.restaurant.name} but belongs to different restaurant`);
+      return sendUnauthorized(res, 'Invalid email or password');
+    }
+
+    // Generate JWT token with restaurant context for authenticated session
+    const token = generateToken(user.id, user.restaurantId);
     
     // Return user data and token
     sendSuccess(res, {
@@ -90,8 +136,16 @@ const signin = async (req, res) => {
       phone: user.phone,
       address: user.address,
       isAdmin: user.isAdmin,
+      restaurantId: user.restaurantId,
+      restaurant: {
+        id: user.restaurant.id,
+        name: user.restaurant.name,
+        slug: user.restaurant.slug
+      },
       token
     });
+
+    console.log(`User login successful: ${email} for ${req.restaurant.name}`);
 
   } catch (error) {
     sendServerError(res, error, 'Server error during login');
@@ -99,7 +153,7 @@ const signin = async (req, res) => {
 };
 
 // OAUTH AUTHENTICATION HANDLER - Processes Google and Facebook login
-const handleOAuth = async (provider, token, res) => {
+const handleOAuth = async (provider, token, res, req) => {
   try {
     let userData;
     
@@ -123,17 +177,32 @@ const handleOAuth = async (provider, token, res) => {
     // Transform OAuth data to our user format
     const transformedUser = transformOAuthUser(provider, userData);
     
-    // Check if user exists
+    // Restaurant context is required for OAuth registration/login
+    if (!req.restaurant || !req.restaurantId) {
+      return sendError(res, 'Restaurant context required for OAuth authentication. Please access via restaurant subdomain (e.g., goldchopsticks.yourapi.com)');
+    }
+
+    // Check if user exists in this restaurant
     let user = await User.findOne({
       where: {
-        [Op.or]: [
-          { email: transformedUser.email },
-          { 
-            thirdPartyId: transformedUser.thirdPartyId, 
-            thirdPartyProvider: transformedUser.thirdPartyProvider 
-          }
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { email: transformedUser.email },
+              { 
+                thirdPartyId: transformedUser.thirdPartyId, 
+                thirdPartyProvider: transformedUser.thirdPartyProvider 
+              }
+            ]
+          },
+          { restaurantId: req.restaurantId } // Must belong to current restaurant
         ]
-      }
+      },
+      include: [{
+        model: Restaurant,
+        as: 'restaurant',
+        attributes: ['id', 'name', 'slug']
+      }]
     });
     
     if (user) {
@@ -153,12 +222,16 @@ const handleOAuth = async (provider, token, res) => {
         });
       }
 
-      // Create new user with placeholder contact info
+      // Create new user with placeholder contact info for current restaurant
       user = await User.create({
         ...transformedUser,
+        restaurantId: req.restaurantId, // Assign to current restaurant
         phone: '',
         address: ''
       });
+
+      // Include restaurant info for response
+      user.restaurant = req.restaurant;
 
       return sendSuccess(res, {
         requiresProfile: true,
@@ -177,9 +250,14 @@ const handleOAuth = async (provider, token, res) => {
       });
     }
     
-    const jwtToken = generateToken(user.id);
+    const jwtToken = generateToken(user.id, user.restaurantId);
     sendSuccess(res, { 
-      ...user.toSafeObject(), 
+      ...user.toSafeObject(),
+      restaurant: {
+        id: user.restaurant.id,
+        name: user.restaurant.name,
+        slug: user.restaurant.slug
+      },
       token: jwtToken 
     });
 
@@ -194,7 +272,7 @@ const googleAuth = (req, res) => {
   if (!token) {
     return sendError(res, 'Google token is required');
   }
-  return handleOAuth('google', token, res);
+  return handleOAuth('google', token, res, req);
 };
 
 // Facebook OAuth
@@ -203,7 +281,7 @@ const facebookAuth = (req, res) => {
   if (!accessToken) {
     return sendError(res, 'Facebook access token is required');
   }
-  return handleOAuth('facebook', accessToken, res);
+  return handleOAuth('facebook', accessToken, res, req);
 };
 
 // Complete OAuth profile
@@ -247,7 +325,7 @@ const completeOAuthProfile = async (req, res) => {
       return sendError(res, 'Either userId or tempUserData is required');
     }
 
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, user.restaurantId);
     sendSuccess(res, {
       ...user.toSafeObject(),
       token,
@@ -263,7 +341,7 @@ const completeOAuthProfile = async (req, res) => {
 const refreshToken = async (req, res) => {
   try {
     const user = req.user;
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, user.restaurantId);
     
     sendSuccess(res, {
       id: user.id,
@@ -273,6 +351,13 @@ const refreshToken = async (req, res) => {
       phone: user.phone,
       address: user.address,
       isAdmin: user.isAdmin,
+      role: user.role,
+      restaurantId: user.restaurantId,
+      restaurant: user.restaurant ? {
+        id: user.restaurant.id,
+        name: user.restaurant.name,
+        slug: user.restaurant.slug
+      } : null,
       token
     });
   } catch (error) {
