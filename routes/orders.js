@@ -1,14 +1,15 @@
 const express = require('express');
 const { Order, OrderItem, MenuItem, User, ComboType } = require('../config/database');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { requireRestaurantContext } = require('../middleware/restaurantContext'); // Multi-tenant support
 const { Op } = require('sequelize');
 const emailService = require('../services/emailService');
 const router = express.Router();
 
 // @route   POST /api/orders
-// @desc    Create new order
-// @access  Public
-router.post('/', async (req, res) => {
+// @desc    Create new order for the current restaurant
+// @access  Public (requires restaurant context)
+router.post('/', requireRestaurantContext, async (req, res) => {
   try {
     const {
       userId,
@@ -54,23 +55,26 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Order totals are required' });
     }
 
-    // Validate order items exist and are available
+    console.log(`Creating order for restaurant: ${req.restaurant.name} (ID: ${req.restaurantId})`);
+
+    // Validate order items exist and are available for this restaurant
     // Separate combo items from regular menu items
     const regularItems = items.filter(item => !item.isCombo && item.menuItemId);
     const comboItems = items.filter(item => item.isCombo);
     
-    // Validate regular menu items
+    // Validate regular menu items belong to current restaurant
     if (regularItems.length > 0) {
       const menuItemIds = regularItems.map(item => item.menuItemId);
       const menuItems = await MenuItem.findAll({
         where: {
           id: menuItemIds,
-          isAvailable: true
+          isAvailable: true,
+          restaurantId: req.restaurantId // Ensure items belong to current restaurant
         }
       });
 
       if (menuItems.length !== menuItemIds.length) {
-        return res.status(400).json({ message: 'Some menu items are not available' });
+        return res.status(400).json({ message: 'Some menu items are not available or do not belong to this restaurant' });
       }
     }
     
@@ -121,8 +125,9 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Create order
+    // Create order for current restaurant
     const order = await Order.create({
+      restaurantId: req.restaurantId, // Assign to current restaurant
       userId: userId || null,
       customerEmail,
       customerFirstName,

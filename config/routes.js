@@ -4,14 +4,15 @@
 const configureRoutes = (app) => {
   
   // MAIN API ROUTES - Each route module handles a specific domain of functionality
-  app.use('/api/auth', require('../routes/auth'));       // User authentication (signup/signin/OAuth)
-  app.use('/api/menu', require('../routes/menu'));       // Menu items and categories management
-  app.use('/api/orders', require('../routes/orders'));   // Order creation and management
-  app.use('/api/payments', require('../routes/payments'));// Stripe payment processing
-  app.use('/api/admin', require('../routes/admin'));     // Admin-only operations
-  app.use('/api/users', require('../routes/users'));     // User profile management
-  app.use('/api/google', require('../routes/google'));   // Google Cloud services integration
-  app.use('/api/combos', require('../routes/combos'));   // Combo meal management
+  app.use('/api/auth', require('../routes/auth'));         // User authentication (signup/signin/OAuth)
+  app.use('/api/menu', require('../routes/menu'));         // Menu items and categories management
+  app.use('/api/orders', require('../routes/orders'));     // Order creation and management
+  app.use('/api/payments', require('../routes/payments')); // Stripe payment processing
+  app.use('/api/admin', require('../routes/admin'));       // Admin-only operations
+  app.use('/api/users', require('../routes/users'));       // User profile management
+  app.use('/api/google', require('../routes/google'));     // Google Cloud services integration
+  app.use('/api/combos', require('../routes/combos'));     // Combo meal management
+  app.use('/api/restaurants', require('../routes/restaurants')); // Restaurant management (multi-tenant)
 
   // SYSTEM HEALTH CHECK - Used by hosting platforms to verify API is running
   app.get('/api/health', (req, res) => {

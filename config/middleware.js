@@ -45,6 +45,9 @@ const fedCMHeaders = (req, res, next) => {
   next();
 };
 
+// Import restaurant context middleware
+const { restaurantContext } = require('../middleware/restaurantContext');
+
 // MAIN MIDDLEWARE CONFIGURATION FUNCTION
 // This function is called from server.js to set up all middleware in the correct order
 const configureMiddleware = (app) => {
@@ -62,10 +65,14 @@ const configureMiddleware = (app) => {
   app.use(unless('/image', express.json({ limit: '10mb' }))); // Parse JSON bodies up to 10MB
   app.use(express.urlencoded({ extended: true })); // Parse form data
   
-  // 4. STATIC FILE SERVING
+  // 4. RESTAURANT CONTEXT - Multi-tenant restaurant detection from subdomain/domain
+  // This must come after body parsing but before route handlers
+  app.use('/api', restaurantContext); // Apply restaurant context to all API routes
+  
+  // 5. STATIC FILE SERVING
   app.use('/uploads', express.static('uploads')); // Serve uploaded files from /uploads directory
   
-  // 5. PRODUCTION SETUP - Serve React frontend files when deployed
+  // 6. PRODUCTION SETUP - Serve React frontend files when deployed
   if (process.env.NODE_ENV === 'production') {
     const path = require('path');
     // Serve static files from React build directory

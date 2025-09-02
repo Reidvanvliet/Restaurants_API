@@ -1,6 +1,7 @@
 const express = require('express');
 const { MenuCategory, MenuItem, sequelize } = require('../config/database'); // Added sequelize import
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { requireRestaurantContext } = require('../middleware/restaurantContext'); // Multi-tenant support
 const storageService = require('../services/storageService');
 const router = express.Router();
 
@@ -64,24 +65,30 @@ const organizeMenuByCategory = (items) => {
 };
 
 // @route   GET /api/menu
-// @desc    Get all menu items organized by category
-// @access  Public
-router.get('/', async (req, res) => {
+// @desc    Get all menu items organized by category for the current restaurant
+// @access  Public (requires restaurant context via subdomain)
+router.get('/', requireRestaurantContext, async (req, res) => {
   try {
-    console.log('GET /api/menu - Fetching menu items...');
+    console.log(`GET /api/menu - Fetching menu items for restaurant: ${req.restaurant.name} (ID: ${req.restaurantId})`);
     
     const items = await MenuItem.findAll({
-      where: { isAvailable: true },
+      where: { 
+        isAvailable: true,
+        restaurantId: req.restaurantId // Filter by current restaurant
+      },
       include: [{
         model: MenuCategory,
         as: 'category',
-        where: { isActive: true },
+        where: { 
+          isActive: true,
+          restaurantId: req.restaurantId // Ensure category belongs to same restaurant
+        },
         required: false // Changed to false to avoid inner join issues
       }],
       order: [['displayOrder', 'ASC'], ['name', 'ASC']]
     });
 
-    console.log(`Found ${items.length} menu items`);
+    console.log(`Found ${items.length} menu items for ${req.restaurant.name}`);
     
     const organizedMenu = organizeMenuByCategory(items);
     res.json(organizedMenu);
@@ -116,15 +123,19 @@ router.get('/all', authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 // @route   GET /api/menu/categories
-// @desc    Get all menu categories
-// @access  Public
-router.get('/categories', async (req, res) => {
+// @desc    Get all menu categories for the current restaurant
+// @access  Public (requires restaurant context)
+router.get('/categories', requireRestaurantContext, async (req, res) => {
   try {
     const categories = await MenuCategory.findAll({
-      where: { isActive: true },
+      where: { 
+        isActive: true,
+        restaurantId: req.restaurantId // Filter by current restaurant
+      },
       order: [['displayOrder', 'ASC']]
     });
     
+    console.log(`Found ${categories.length} categories for ${req.restaurant.name}`);
     res.json(categories);
   } catch (error) {
     console.error('Get categories error:', error);
@@ -224,9 +235,9 @@ router.get('/:id', async (req, res) => {
 });
 
 // @route   POST /api/menu
-// @desc    Create new menu item
-// @access  Private (Admin)
-router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
+// @desc    Create new menu item for the current restaurant
+// @access  Private (Admin, requires restaurant context)
+router.post('/', requireRestaurantContext, authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { categoryId, name, description, price, isSpicy, isAvailable, displayOrder } = req.body;
 
@@ -235,13 +246,20 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Category, name, and price are required' });
     }
 
-    // Check if category exists
-    const category = await MenuCategory.findByPk(categoryId);
+    // Check if category exists and belongs to current restaurant
+    const category = await MenuCategory.findOne({
+      where: { 
+        id: categoryId,
+        restaurantId: req.restaurantId // Ensure category belongs to current restaurant
+      }
+    });
+    
     if (!category) {
-      return res.status(400).json({ message: 'Invalid category' });
+      return res.status(400).json({ message: 'Invalid category or category does not belong to this restaurant' });
     }
 
     const item = await MenuItem.create({
+      restaurantId: req.restaurantId, // Assign to current restaurant
       categoryId,
       name,
       description,
@@ -259,6 +277,7 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
       }]
     });
 
+    console.log(`Created menu item "${name}" for ${req.restaurant.name}`);
     res.status(201).json(createdItem);
   } catch (error) {
     console.error('Create menu item error:', error);

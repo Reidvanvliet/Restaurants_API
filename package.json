@@ -10,6 +10,7 @@
   "dependencies": {
     "@google-cloud/storage": "^7.16.0",
     "apple-signin-auth": "^2.0.0",
+    "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
