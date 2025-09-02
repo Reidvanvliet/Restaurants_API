@@ -1,0 +1,8 @@
+/node_modules
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+just-circle-467315-h9-60a9d2a110f6.json

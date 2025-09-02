@@ -1,0 +1,700 @@
+const express = require('express');
+const { MenuCategory, MenuItem, sequelize } = require('../config/database'); // Added sequelize import
+const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const storageService = require('../services/storageService');
+const router = express.Router();
+
+// Configure multer for image uploads
+console.log('📋 Loading menu routes...');
+console.log('📋 StorageService available:', typeof storageService);
+console.log('📋 Getting multer config...');
+let upload;
+try {
+  upload = storageService.getMulterConfig();
+  console.log('📋 Multer config loaded successfully');
+} catch (error) {
+  console.error('❌ Error loading multer config:', error);
+  throw error;
+}
+
+// Helper function to organize menu items by category
+const organizeMenuByCategory = (items) => {
+  const categoryMap = {
+    1: 'appetizers',
+    2: 'soup',
+    3: 'chowMein',
+    4: 'friedRice',
+    5: 'chopSuey',
+    6: 'eggFooYoung',
+    7: 'chicken',
+    8: 'beef',
+    9: 'pork',
+    10: 'seafood',
+    11: 'chefSpecialty',
+    12: 'combinations',
+    13: 'sauces',
+    14: 'extras'
+  };
+
+  const organized = {};
+  
+  items.forEach(item => {
+    const categoryKey = categoryMap[item.categoryId] || 'other';
+    if (!organized[categoryKey]) {
+      organized[categoryKey] = [];
+    }
+    organized[categoryKey].push({
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price: parseFloat(item.price),
+      imageUrl: item.imageUrl,
+      isSpicy: item.isSpicy,
+      isAvailable: item.isAvailable,
+      displayOrder: item.displayOrder
+    });
+  });
+
+  // Sort items within each category by display order
+  Object.keys(organized).forEach(key => {
+    organized[key].sort((a, b) => a.displayOrder - b.displayOrder);
+  });
+
+  return organized;
+};
+
+// @route   GET /api/menu
+// @desc    Get all menu items organized by category
+// @access  Public
+router.get('/', async (req, res) => {
+  try {
+    console.log('GET /api/menu - Fetching menu items...');
+    
+    const items = await MenuItem.findAll({
+      where: { isAvailable: true },
+      include: [{
+        model: MenuCategory,
+        as: 'category',
+        where: { isActive: true },
+        required: false // Changed to false to avoid inner join issues
+      }],
+      order: [['displayOrder', 'ASC'], ['name', 'ASC']]
+    });
+
+    console.log(`Found ${items.length} menu items`);
+    
+    const organizedMenu = organizeMenuByCategory(items);
+    res.json(organizedMenu);
+
+  } catch (error) {
+    console.error('Get menu error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: 'Failed to fetch menu items', error: error.message });
+  }
+});
+
+// @route   GET /api/menu/all
+// @desc    Get all menu items including unavailable (admin only)
+// @access  Private (Admin)
+router.get('/all', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const items = await MenuItem.findAll({
+      include: [{
+        model: MenuCategory,
+        as: 'category'
+      }],
+      order: [['categoryId', 'ASC'], ['displayOrder', 'ASC'], ['name', 'ASC']]
+    });
+
+    const organizedMenu = organizeMenuByCategory(items);
+    res.json(organizedMenu);
+
+  } catch (error) {
+    console.error('Get all menu items error:', error);
+    res.status(500).json({ message: 'Failed to fetch menu items' });
+  }
+});
+
+// @route   GET /api/menu/categories
+// @desc    Get all menu categories
+// @access  Public
+router.get('/categories', async (req, res) => {
+  try {
+    const categories = await MenuCategory.findAll({
+      where: { isActive: true },
+      order: [['displayOrder', 'ASC']]
+    });
+    
+    res.json(categories);
+  } catch (error) {
+    console.error('Get categories error:', error);
+    res.status(500).json({ message: 'Failed to fetch categories' });
+  }
+});
+
+// @route   GET /api/menu/categories/all
+// @desc    Get all menu categories including inactive (admin only)
+// @access  Private (Admin)
+router.get('/categories/all', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const categories = await MenuCategory.findAll({
+      order: [['displayOrder', 'ASC']]
+    });
+    
+    res.json(categories);
+  } catch (error) {
+    console.error('Get all categories error:', error);
+    res.status(500).json({ message: 'Failed to fetch all categories' });
+  }
+});
+
+// @route   GET /api/menu/category/:categoryId
+// @desc    Get menu items by category
+// @access  Public
+router.get('/category/:categoryId', async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    
+    const items = await MenuItem.findAll({
+      where: { 
+        categoryId: categoryId,
+        isAvailable: true 
+      },
+      include: [{
+        model: MenuCategory,
+        as: 'category',
+        where: { isActive: true }
+      }],
+      order: [['displayOrder', 'ASC'], ['name', 'ASC']]
+    });
+
+    res.json(items);
+  } catch (error) {
+    console.error('Get category items error:', error);
+    res.status(500).json({ message: 'Failed to fetch category items' });
+  }
+});
+
+// @route   GET /api/menu/storage-status
+// @desc    Check storage service status
+// @access  Private (Admin)
+router.get('/storage-status', authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const isAvailable = storageService.isAvailable();
+    const config = {
+      projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+      bucketName: process.env.GOOGLE_CLOUD_BUCKET_NAME,
+      keyFile: process.env.GOOGLE_CLOUD_KEY_FILE,
+      isAvailable: isAvailable
+    };
+    
+    res.json({
+      message: 'Storage service status',
+      ...config
+    });
+  } catch (error) {
+    console.error('Storage status error:', error);
+    res.status(500).json({ message: 'Failed to get storage status', error: error.message });
+  }
+});
+
+// @route   GET /api/menu/:id
+// @desc    Get single menu item
+// @access  Public
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const item = await MenuItem.findByPk(id, {
+      include: [{
+        model: MenuCategory,
+        as: 'category'
+      }]
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
+
+    res.json(item);
+  } catch (error) {
+    console.error('Get menu item error:', error);
+    res.status(500).json({ message: 'Failed to fetch menu item' });
+  }
+});
+
+// @route   POST /api/menu
+// @desc    Create new menu item
+// @access  Private (Admin)
+router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { categoryId, name, description, price, isSpicy, isAvailable, displayOrder } = req.body;
+
+    // Validation
+    if (!categoryId || !name || !price) {
+      return res.status(400).json({ message: 'Category, name, and price are required' });
+    }
+
+    // Check if category exists
+    const category = await MenuCategory.findByPk(categoryId);
+    if (!category) {
+      return res.status(400).json({ message: 'Invalid category' });
+    }
+
+    const item = await MenuItem.create({
+      categoryId,
+      name,
+      description,
+      price: parseFloat(price),
+      isSpicy: isSpicy || false,
+      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      displayOrder: displayOrder || 0
+    });
+
+    // Fetch the created item with category info
+    const createdItem = await MenuItem.findByPk(item.id, {
+      include: [{
+        model: MenuCategory,
+        as: 'category'
+      }]
+    });
+
+    res.status(201).json(createdItem);
+  } catch (error) {
+    console.error('Create menu item error:', error);
+    res.status(500).json({ message: 'Failed to create menu item' });
+  }
+});
+
+// @route   PUT /api/menu/:id
+// @desc    Update menu item
+// @access  Private (Admin)
+router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { categoryId, name, description, price, isSpicy, isAvailable, displayOrder } = req.body;
+
+    const item = await MenuItem.findByPk(id);
+    if (!item) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
+
+    // Update fields
+    const updateData = {};
+    if (categoryId !== undefined) updateData.categoryId = categoryId;
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (price !== undefined) updateData.price = parseFloat(price);
+    if (isSpicy !== undefined) updateData.isSpicy = isSpicy;
+    if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
+    if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
+
+    await item.update(updateData);
+
+    // Fetch updated item with category info
+    const updatedItem = await MenuItem.findByPk(id, {
+      include: [{
+        model: MenuCategory,
+        as: 'category'
+      }]
+    });
+
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Update menu item error:', error);
+    res.status(500).json({ message: 'Failed to update menu item' });
+  }
+});
+
+// @route   DELETE /api/menu/:id
+// @desc    Delete menu item
+// @access  Private (Admin)
+router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const item = await MenuItem.findByPk(id);
+    if (!item) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
+
+    await item.destroy();
+    res.json({ message: 'Menu item deleted successfully' });
+  } catch (error) {
+    console.error('Delete menu item error:', error);
+    res.status(500).json({ message: 'Failed to delete menu item' });
+  }
+});
+
+// @route   POST /api/menu/categories
+// @desc    Create new menu category
+// @access  Private (Admin)
+router.post('/categories', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { name, displayOrder } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ message: 'Category name is required' });
+    }
+
+    const category = await MenuCategory.create({
+      name,
+      displayOrder: displayOrder || 0
+    });
+
+    res.status(201).json(category);
+  } catch (error) {
+    console.error('Create category error:', error);
+    res.status(500).json({ message: 'Failed to create category' });
+  }
+});
+
+// @route   PUT /api/menu/categories/:id
+// @desc    Update menu category
+// @access  Private (Admin)
+router.put('/categories/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, displayOrder, isActive } = req.body;
+
+    const category = await MenuCategory.findByPk(id);
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    await category.update(updateData);
+    res.json(category);
+  } catch (error) {
+    console.error('Update category error:', error);
+    res.status(500).json({ message: 'Failed to update category' });
+  }
+});
+
+// @route   DELETE /api/menu/categories/:id
+// @desc    Delete menu category
+// @access  Private (Admin)
+router.delete('/categories/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const category = await MenuCategory.findByPk(id);
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    // Check if category has menu items
+    const itemCount = await MenuItem.count({ where: { categoryId: id } });
+    if (itemCount > 0) {
+      return res.status(400).json({ 
+        message: `Cannot delete category with ${itemCount} menu items. Please move or delete the items first.` 
+      });
+    }
+
+    await category.destroy();
+    res.json({ message: 'Category deleted successfully' });
+  } catch (error) {
+    console.error('Delete category error:', error);
+    res.status(500).json({ message: 'Failed to delete category' });
+  }
+});
+
+// @route   POST /api/menu/:id/image
+// @desc    Upload image for menu item
+// @access  Private (Admin)
+router.post('/:id/image', authMiddleware, adminMiddleware, (req, res, next) => {
+  console.log('📤 Image upload request received for item ID:', req.params.id);
+  console.log('📤 Storage service available:', storageService.isAvailable());
+  
+  // Handle multer upload
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'File size too large. Maximum size is 5MB.' });
+      }
+      if (err.message === 'Only image files are allowed') {
+        return res.status(400).json({ message: 'Only image files are allowed' });
+      }
+      return res.status(400).json({ message: 'File upload error', error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('📝 Processing image upload for item ID:', id);
+
+    // Check if file was uploaded
+    if (!req.file) {
+      console.log('❌ No file provided in request');
+      return res.status(400).json({ message: 'No image file provided' });
+    }
+    console.log('📁 File received:', { name: req.file.originalname, size: req.file.size, mimetype: req.file.mimetype });
+
+    // Check if storage service is available
+    if (!storageService.isAvailable()) {
+      console.log('❌ Storage service not available');
+      return res.status(503).json({ message: 'Image upload service is not available' });
+    }
+    console.log('☁️ Storage service is available');
+
+    // Find the menu item
+    console.log('🔍 Looking for menu item with ID:', id);
+    const menuItem = await MenuItem.findByPk(id);
+    if (!menuItem) {
+      console.log('❌ Menu item not found with ID:', id);
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
+    console.log('✅ Menu item found:', menuItem.name);
+
+    // Delete old image if exists
+    if (menuItem.imageUrl) {
+      console.log('🗑️ Deleting old image:', menuItem.imageUrl);
+      const oldFilename = storageService.extractFilenameFromUrl(menuItem.imageUrl);
+      if (oldFilename) {
+        try {
+          await storageService.deleteImage(oldFilename);
+          console.log('✅ Old image deleted successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to delete old image:', error.message);
+        }
+      }
+    }
+
+    // Upload new image
+    console.log('📤 Starting upload to Google Cloud Storage...');
+    const uploadResult = await storageService.uploadImage(req.file, 'menu-items');
+    console.log('✅ Upload successful:', uploadResult.url);
+
+    // Update menu item with new image URL
+    console.log('💾 Updating menu item with new image URL...');
+    await menuItem.update({
+      imageUrl: uploadResult.url
+    });
+    console.log('✅ Menu item updated successfully');
+
+    // Fetch updated item with category info
+    const updatedItem = await MenuItem.findByPk(id, {
+      include: [{
+        model: MenuCategory,
+        as: 'category'
+      }]
+    });
+
+    res.json({
+      message: 'Image uploaded successfully',
+      menuItem: updatedItem,
+      uploadInfo: {
+        filename: uploadResult.filename,
+        url: uploadResult.url,
+        size: uploadResult.size
+      }
+    });
+
+  } catch (error) {
+    console.error('Upload image error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Storage service available:', storageService.isAvailable());
+    
+    // Handle multer errors
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: 'File size too large. Maximum size is 5MB.' });
+    }
+    if (error.message === 'Only image files are allowed') {
+      return res.status(400).json({ message: 'Only image files are allowed' });
+    }
+    
+    res.status(500).json({ message: 'Failed to upload image', error: error.message });
+  }
+});
+
+// @route   DELETE /api/menu/:id/image
+// @desc    Delete image for menu item
+// @access  Private (Admin)
+router.delete('/:id/image', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find the menu item
+    const menuItem = await MenuItem.findByPk(id);
+    if (!menuItem) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
+
+    if (!menuItem.imageUrl) {
+      return res.status(400).json({ message: 'Menu item has no image to delete' });
+    }
+
+    // Extract filename from URL and delete from storage
+    if (storageService.isAvailable()) {
+      const filename = storageService.extractFilenameFromUrl(menuItem.imageUrl);
+      if (filename) {
+        try {
+          await storageService.deleteImage(filename);
+        } catch (error) {
+          console.warn('Failed to delete image from storage:', error.message);
+        }
+      }
+    }
+
+    // Remove image URL from database
+    await menuItem.update({
+      imageUrl: null
+    });
+
+    // Fetch updated item with category info
+    const updatedItem = await MenuItem.findByPk(id, {
+      include: [{
+        model: MenuCategory,
+        as: 'category'
+      }]
+    });
+
+    res.json({
+      message: 'Image deleted successfully',
+      menuItem: updatedItem
+    });
+
+  } catch (error) {
+    console.error('Delete image error:', error);
+    res.status(500).json({ message: 'Failed to delete image' });
+  }
+});
+
+// @route   PUT /api/menu/:id
+// @desc    Update menu item (modified to handle image uploads)
+// @access  Private (Admin)
+router.put('/:id/with-image', authMiddleware, adminMiddleware, upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { categoryId, name, description, price, isSpicy, isAvailable, displayOrder } = req.body;
+
+    const item = await MenuItem.findByPk(id);
+    if (!item) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
+
+    // Handle image upload if provided
+    let imageUrl = item.imageUrl; // Keep existing image URL by default
+    
+    if (req.file && storageService.isAvailable()) {
+      // Delete old image if exists
+      if (item.imageUrl) {
+        const oldFilename = storageService.extractFilenameFromUrl(item.imageUrl);
+        if (oldFilename) {
+          try {
+            await storageService.deleteImage(oldFilename);
+          } catch (error) {
+            console.warn('Failed to delete old image:', error.message);
+          }
+        }
+      }
+
+      // Upload new image
+      const uploadResult = await storageService.uploadImage(req.file, 'menu-items');
+      imageUrl = uploadResult.url;
+    }
+
+    // Update fields
+    const updateData = {};
+    if (categoryId !== undefined) updateData.categoryId = categoryId;
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (price !== undefined) updateData.price = parseFloat(price);
+    if (isSpicy !== undefined) updateData.isSpicy = isSpicy;
+    if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
+    if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
+    if (imageUrl !== item.imageUrl) updateData.imageUrl = imageUrl;
+
+    await item.update(updateData);
+
+    // Fetch updated item with category info
+    const updatedItem = await MenuItem.findByPk(id, {
+      include: [{
+        model: MenuCategory,
+        as: 'category'
+      }]
+    });
+
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Update menu item with image error:', error);
+    
+    // Handle multer errors
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: 'File size too large. Maximum size is 5MB.' });
+    }
+    if (error.message === 'Only image files are allowed') {
+      return res.status(400).json({ message: 'Only image files are allowed' });
+    }
+    
+    res.status(500).json({ message: 'Failed to update menu item' });
+  }
+});
+
+// @route   POST /api/menu/with-image
+// @desc    Create new menu item with image
+// @access  Private (Admin)
+router.post('/with-image', authMiddleware, adminMiddleware, upload.single('image'), async (req, res) => {
+  try {
+    const { categoryId, name, description, price, isSpicy, isAvailable, displayOrder } = req.body;
+
+    // Validation
+    if (!categoryId || !name || !price) {
+      return res.status(400).json({ message: 'Category, name, and price are required' });
+    }
+
+    // Check if category exists
+    const category = await MenuCategory.findByPk(categoryId);
+    if (!category) {
+      return res.status(400).json({ message: 'Invalid category' });
+    }
+
+    // Handle image upload if provided
+    let imageUrl = null;
+    if (req.file && storageService.isAvailable()) {
+      const uploadResult = await storageService.uploadImage(req.file, 'menu-items');
+      imageUrl = uploadResult.url;
+    }
+
+    const item = await MenuItem.create({
+      categoryId,
+      name,
+      description,
+      price: parseFloat(price),
+      isSpicy: isSpicy || false,
+      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      displayOrder: displayOrder || 0,
+      imageUrl: imageUrl
+    });
+
+    // Fetch the created item with category info
+    const createdItem = await MenuItem.findByPk(item.id, {
+      include: [{
+        model: MenuCategory,
+        as: 'category'
+      }]
+    });
+
+    res.status(201).json(createdItem);
+  } catch (error) {
+    console.error('Create menu item with image error:', error);
+    
+    // Handle multer errors
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: 'File size too large. Maximum size is 5MB.' });
+    }
+    if (error.message === 'Only image files are allowed') {
+      return res.status(400).json({ message: 'Only image files are allowed' });
+    }
+    
+    res.status(500).json({ message: 'Failed to create menu item' });
+  }
+});
+
+module.exports = router;
