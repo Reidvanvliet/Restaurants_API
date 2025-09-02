@@ -6,6 +6,247 @@ const { Op } = require('sequelize');
 const emailService = require('../services/emailService');
 const router = express.Router();
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     OrderRequest:
+ *       type: object
+ *       required:
+ *         - customerEmail
+ *         - customerFirstName
+ *         - customerLastName
+ *         - customerPhone
+ *         - orderType
+ *         - paymentMethod
+ *         - items
+ *         - subtotal
+ *         - tax
+ *         - total
+ *       properties:
+ *         customerEmail:
+ *           type: string
+ *           format: email
+ *           description: Customer email address
+ *         customerFirstName:
+ *           type: string
+ *           description: Customer first name
+ *         customerLastName:
+ *           type: string
+ *           description: Customer last name
+ *         customerPhone:
+ *           type: string
+ *           description: Customer phone number
+ *         customerAddress:
+ *           type: string
+ *           description: Customer address (required for delivery)
+ *         orderType:
+ *           type: string
+ *           enum: [pickup, delivery]
+ *           description: Order type
+ *         paymentMethod:
+ *           type: string
+ *           enum: [card, card_on_arrival, cash_on_arrival]
+ *           description: Payment method
+ *         paymentStatus:
+ *           type: string
+ *           enum: [pending, paid, failed, refunded]
+ *           description: Payment status
+ *           default: pending
+ *         items:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               menuItemId:
+ *                 type: integer
+ *                 description: Menu item ID
+ *               quantity:
+ *                 type: integer
+ *                 description: Quantity
+ *               price:
+ *                 type: number
+ *                 format: decimal
+ *                 description: Price per item
+ *               itemName:
+ *                 type: string
+ *                 description: Item name
+ *         subtotal:
+ *           type: number
+ *           format: decimal
+ *           description: Order subtotal
+ *         tax:
+ *           type: number
+ *           format: decimal
+ *           description: Tax amount
+ *         deliveryFee:
+ *           type: number
+ *           format: decimal
+ *           description: Delivery fee
+ *           default: 0
+ *         total:
+ *           type: number
+ *           format: decimal
+ *           description: Total amount
+ *         notes:
+ *           type: string
+ *           description: Special instructions
+ *     
+ *     OrderResponse:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *         restaurant:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: integer
+ *             name:
+ *               type: string
+ *             slug:
+ *               type: string
+ *         order:
+ *           $ref: '#/components/schemas/Order'
+ */
+
+/**
+ * @swagger
+ * /api/orders:
+ *   post:
+ *     tags:
+ *       - Orders
+ *     summary: Create new order
+ *     description: Create a new order for the current restaurant
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/OrderRequest'
+ *     responses:
+ *       201:
+ *         description: Order created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderResponse'
+ *       400:
+ *         description: Validation error or restaurant context required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/orders/admin/all:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     summary: Get all orders (Restaurant Admin)
+ *     description: Get all orders with filters for the current restaurant (Restaurant Admin only)
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, confirmed, preparing, ready, completed, cancelled]
+ *         description: Filter by order status
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Items per page
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Orders retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 restaurant:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     name:
+ *                       type: string
+ *                     slug:
+ *                       type: string
+ *                 orders:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Order'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *       400:
+ *         description: Restaurant context required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Restaurant admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
 // @route   POST /api/orders
 // @desc    Create new order for the current restaurant
 // @access  Public (requires restaurant context)

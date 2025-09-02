@@ -1,6 +1,119 @@
 // AUTHENTICATION CONTROLLER - Handles user registration, login, and OAuth authentication
 // This controller manages user authentication for the restaurant ordering system
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     SignupRequest:
+ *       type: object
+ *       required:
+ *         - email
+ *         - password
+ *         - firstName
+ *         - lastName
+ *         - phone
+ *         - address
+ *       properties:
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: User email address
+ *         password:
+ *           type: string
+ *           minLength: 6
+ *           description: User password (minimum 6 characters)
+ *         firstName:
+ *           type: string
+ *           description: User first name
+ *         lastName:
+ *           type: string
+ *           description: User last name
+ *         phone:
+ *           type: string
+ *           description: User phone number
+ *         address:
+ *           type: string
+ *           description: User address
+ *     
+ *     SigninRequest:
+ *       type: object
+ *       required:
+ *         - email
+ *         - password
+ *       properties:
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: User email address
+ *         password:
+ *           type: string
+ *           description: User password
+ *     
+ *     AuthResponse:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *           description: User ID
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: User email
+ *         firstName:
+ *           type: string
+ *           description: User first name
+ *         lastName:
+ *           type: string
+ *           description: User last name
+ *         phone:
+ *           type: string
+ *           description: User phone number
+ *         address:
+ *           type: string
+ *           description: User address
+ *         isAdmin:
+ *           type: boolean
+ *           description: Legacy admin flag
+ *         role:
+ *           type: string
+ *           enum: [user, restaurant_admin, super_admin]
+ *           description: User role
+ *         restaurantId:
+ *           type: integer
+ *           description: Restaurant ID user belongs to
+ *         restaurant:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: integer
+ *             name:
+ *               type: string
+ *             slug:
+ *               type: string
+ *         token:
+ *           type: string
+ *           description: JWT authentication token
+ *     
+ *     GoogleAuthRequest:
+ *       type: object
+ *       required:
+ *         - token
+ *       properties:
+ *         token:
+ *           type: string
+ *           description: Google OAuth token
+ *     
+ *     FacebookAuthRequest:
+ *       type: object
+ *       required:
+ *         - accessToken
+ *       properties:
+ *         accessToken:
+ *           type: string
+ *           description: Facebook access token
+ */
+
 const { User, Restaurant } = require('../config/database'); // Added Restaurant model
 const { Op } = require('sequelize'); // Sequelize operators for database queries
 const { generateToken, validateRequiredFields, isValidPassword } = require('../utils/auth');

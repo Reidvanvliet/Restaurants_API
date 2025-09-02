@@ -1,6 +1,485 @@
 // RESTAURANT MANAGEMENT ROUTES - CRUD operations for restaurant entities
 // These routes handle restaurant creation, updates, and management for multi-tenant system
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     RestaurantRequest:
+ *       type: object
+ *       required:
+ *         - name
+ *       properties:
+ *         name:
+ *           type: string
+ *           description: Restaurant name
+ *           example: "Gold Chopsticks"
+ *         slug:
+ *           type: string
+ *           description: URL-friendly identifier (auto-generated if not provided)
+ *           example: "goldchopsticks"
+ *         domain:
+ *           type: string
+ *           description: Custom domain (optional)
+ *           example: "goldchopsticks.com"
+ *         logo:
+ *           type: string
+ *           description: URL to restaurant logo
+ *         themeColors:
+ *           type: object
+ *           properties:
+ *             primary:
+ *               type: string
+ *               example: "#d97706"
+ *             secondary:
+ *               type: string
+ *               example: "#92400e"
+ *             accent:
+ *               type: string
+ *               example: "#fbbf24"
+ *             background:
+ *               type: string
+ *               example: "#ffffff"
+ *             text:
+ *               type: string
+ *               example: "#1f2937"
+ *         contactInfo:
+ *           type: object
+ *           properties:
+ *             phone:
+ *               type: string
+ *               example: "555-0123"
+ *             email:
+ *               type: string
+ *               example: "info@goldchopsticks.com"
+ *             address:
+ *               type: string
+ *               example: "123 Main St, City, State"
+ *             hours:
+ *               type: string
+ *               example: "Mon-Sun 11:00-22:00"
+ *             socialMedia:
+ *               type: object
+ *         isActive:
+ *           type: boolean
+ *           description: Whether restaurant is active
+ *           default: true
+ *     
+ *     RestaurantListResponse:
+ *       type: object
+ *       properties:
+ *         restaurants:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Restaurant'
+ *         pagination:
+ *           type: object
+ *           properties:
+ *             total:
+ *               type: integer
+ *             page:
+ *               type: integer
+ *             limit:
+ *               type: integer
+ *             pages:
+ *               type: integer
+ */
+
+/**
+ * @swagger
+ * /api/restaurants:
+ *   get:
+ *     tags:
+ *       - Restaurants
+ *     summary: Get all restaurants (Super Admin only)
+ *     description: Retrieve a paginated list of all restaurants in the system
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by name, slug, or domain
+ *       - in: query
+ *         name: active
+ *         schema:
+ *           type: boolean
+ *         description: Filter by active status
+ *     responses:
+ *       200:
+ *         description: Restaurants retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RestaurantListResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Super admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *   post:
+ *     tags:
+ *       - Restaurants
+ *     summary: Create new restaurant (Super Admin only)
+ *     description: Create a new restaurant in the multi-tenant system
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RestaurantRequest'
+ *     responses:
+ *       201:
+ *         description: Restaurant created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Restaurant'
+ *       400:
+ *         description: Validation error or slug/domain already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Super admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/restaurants/{id}:
+ *   get:
+ *     tags:
+ *       - Restaurants
+ *     summary: Get restaurant details
+ *     description: Get detailed information about a specific restaurant (Restaurant Admin for own restaurant, Super Admin for any)
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Restaurant ID
+ *     responses:
+ *       200:
+ *         description: Restaurant details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Restaurant'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Access denied to this restaurant
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Restaurant not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *   put:
+ *     tags:
+ *       - Restaurants
+ *     summary: Update restaurant
+ *     description: Update restaurant information (Restaurant Admin for own restaurant, Super Admin for any)
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Restaurant ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RestaurantRequest'
+ *     responses:
+ *       200:
+ *         description: Restaurant updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Restaurant'
+ *       400:
+ *         description: Validation error or slug/domain conflicts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Access denied to this restaurant
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Restaurant not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *   delete:
+ *     tags:
+ *       - Restaurants
+ *     summary: Delete/deactivate restaurant (Super Admin only)
+ *     description: Delete or deactivate a restaurant (use ?force=true to deactivate instead of delete)
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Restaurant ID
+ *       - in: query
+ *         name: force
+ *         schema:
+ *           type: boolean
+ *         description: Force deactivation instead of deletion
+ *     responses:
+ *       200:
+ *         description: Restaurant deleted/deactivated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 restaurant:
+ *                   $ref: '#/components/schemas/Restaurant'
+ *       400:
+ *         description: Cannot delete restaurant with existing data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     userCount:
+ *                       type: integer
+ *                     orderCount:
+ *                       type: integer
+ *                 suggestion:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Super admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Restaurant not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/restaurants/context/health:
+ *   get:
+ *     tags:
+ *       - Restaurants
+ *     summary: Get restaurant context system health
+ *     description: Check the health of the restaurant context caching system (Admin only)
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Health status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: "OK"
+ *                 restaurantContext:
+ *                   type: object
+ *                   properties:
+ *                     cacheSize:
+ *                       type: integer
+ *                       description: Number of restaurants in cache
+ *                     cacheAge:
+ *                       type: integer
+ *                       description: Age of cache in milliseconds
+ *                     cacheMaxAge:
+ *                       type: integer
+ *                       description: Maximum cache age
+ *                     cacheNeedsRefresh:
+ *                       type: boolean
+ *                       description: Whether cache needs refresh
+ *                     cachedRestaurants:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       description: List of cached restaurant identifiers
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/restaurants/context/refresh:
+ *   post:
+ *     tags:
+ *       - Restaurants
+ *     summary: Refresh restaurant cache
+ *     description: Manually refresh the restaurant context cache (Admin only)
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Cache refreshed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Restaurant cache refreshed successfully"
+ *                 restaurantCount:
+ *                   type: integer
+ *                   description: Number of restaurants loaded into cache
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
 const express = require('express');
 const { Restaurant, User, MenuItem, Order, sequelize } = require('../config/database'); // Added sequelize import
 const { authMiddleware, adminMiddleware, superAdminMiddleware, restaurantAdminMiddleware } = require('../middleware/auth');

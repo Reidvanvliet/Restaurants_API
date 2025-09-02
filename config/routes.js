@@ -1,7 +1,19 @@
 // API ROUTE CONFIGURATION - Central routing setup for all API endpoints
 // This file organizes and mounts all route modules to their respective paths
 
+const { specs, swaggerUi } = require('../swagger');
+
 const configureRoutes = (app) => {
+  
+  // SWAGGER DOCUMENTATION - Interactive API documentation
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(specs, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Multi-Tenant Restaurant API Documentation',
+    swaggerOptions: {
+      persistAuthorization: true
+    }
+  }));
   
   // MAIN API ROUTES - Each route module handles a specific domain of functionality
   app.use('/api/auth', require('../routes/auth'));         // User authentication (signup/signin/OAuth)
@@ -18,9 +30,17 @@ const configureRoutes = (app) => {
   app.get('/api/health', (req, res) => {
     res.json({ 
       status: 'OK', 
-      message: 'Golden Chopsticks API is running!',
+      message: 'Multi-Tenant Restaurant API is running!',
       timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || '1.0.0'
+      version: process.env.npm_package_version || '1.0.0',
+      documentation: `${req.protocol}://${req.get('host')}/api/docs`,
+      endpoints: {
+        auth: '/api/auth',
+        menu: '/api/menu',
+        orders: '/api/orders',
+        restaurants: '/api/restaurants',
+        documentation: '/api/docs'
+      }
     });
   });
 

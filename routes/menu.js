@@ -5,6 +5,471 @@ const { requireRestaurantContext } = require('../middleware/restaurantContext');
 const storageService = require('../services/storageService');
 const router = express.Router();
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     MenuResponse:
+ *       type: object
+ *       properties:
+ *         restaurant:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: integer
+ *             name:
+ *               type: string
+ *             slug:
+ *               type: string
+ *         menu:
+ *           type: object
+ *           additionalProperties:
+ *             type: array
+ *             items:
+ *               $ref: '#/components/schemas/MenuItem'
+ *         itemCount:
+ *           type: integer
+ *     
+ *     CategoriesResponse:
+ *       type: object
+ *       properties:
+ *         restaurant:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: integer
+ *             name:
+ *               type: string
+ *             slug:
+ *               type: string
+ *         categories:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/MenuCategory'
+ *         categoryCount:
+ *           type: integer
+ *     
+ *     MenuItemRequest:
+ *       type: object
+ *       required:
+ *         - categoryId
+ *         - name
+ *         - price
+ *       properties:
+ *         categoryId:
+ *           type: integer
+ *           description: Category ID the item belongs to
+ *         name:
+ *           type: string
+ *           description: Menu item name
+ *           example: "General Tso Chicken"
+ *         description:
+ *           type: string
+ *           description: Item description
+ *           example: "Sweet and spicy chicken dish"
+ *         price:
+ *           type: number
+ *           format: decimal
+ *           description: Item price
+ *           example: 16.99
+ *         isSpicy:
+ *           type: boolean
+ *           description: Whether item is spicy
+ *           default: false
+ *         isAvailable:
+ *           type: boolean
+ *           description: Whether item is available
+ *           default: true
+ *         displayOrder:
+ *           type: integer
+ *           description: Display order
+ *           default: 0
+ *     
+ *     MenuItemResponse:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *         restaurant:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: integer
+ *             name:
+ *               type: string
+ *             slug:
+ *               type: string
+ *         menuItem:
+ *           $ref: '#/components/schemas/MenuItem'
+ *     
+ *     CategoryRequest:
+ *       type: object
+ *       required:
+ *         - name
+ *       properties:
+ *         name:
+ *           type: string
+ *           description: Category name
+ *           example: "Appetizers"
+ *         displayOrder:
+ *           type: integer
+ *           description: Display order
+ *           default: 0
+ */
+
+/**
+ * @swagger
+ * /api/menu:
+ *   get:
+ *     tags:
+ *       - Menu
+ *     summary: Get restaurant menu
+ *     description: Get all available menu items organized by category for the current restaurant
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *     responses:
+ *       200:
+ *         description: Menu retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MenuResponse'
+ *       400:
+ *         description: Restaurant context required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *   post:
+ *     tags:
+ *       - Menu
+ *     summary: Create new menu item
+ *     description: Create a new menu item for the current restaurant (Restaurant Admin only)
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/MenuItemRequest'
+ *     responses:
+ *       201:
+ *         description: Menu item created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MenuItemResponse'
+ *       400:
+ *         description: Validation error or invalid category
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Restaurant admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/menu/categories:
+ *   get:
+ *     tags:
+ *       - Menu
+ *     summary: Get menu categories
+ *     description: Get all active menu categories for the current restaurant
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *     responses:
+ *       200:
+ *         description: Categories retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CategoriesResponse'
+ *       400:
+ *         description: Restaurant context required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *   post:
+ *     tags:
+ *       - Menu
+ *     summary: Create new menu category
+ *     description: Create a new menu category for the current restaurant (Restaurant Admin only)
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CategoryRequest'
+ *     responses:
+ *       201:
+ *         description: Category created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MenuCategory'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Restaurant admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/menu/{id}:
+ *   get:
+ *     tags:
+ *       - Menu
+ *     summary: Get single menu item
+ *     description: Get details of a specific menu item from the current restaurant
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Menu item ID
+ *     responses:
+ *       200:
+ *         description: Menu item retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MenuItem'
+ *       400:
+ *         description: Restaurant context required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Menu item not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *   put:
+ *     tags:
+ *       - Menu
+ *     summary: Update menu item
+ *     description: Update a menu item belonging to the current restaurant (Restaurant Admin only)
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Menu item ID
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/MenuItemRequest'
+ *     responses:
+ *       200:
+ *         description: Menu item updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MenuItem'
+ *       400:
+ *         description: Validation error or restaurant context required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Restaurant admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Menu item not found or doesn't belong to this restaurant
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *   delete:
+ *     tags:
+ *       - Menu
+ *     summary: Delete menu item
+ *     description: Delete a menu item belonging to the current restaurant (Restaurant Admin only)
+ *     parameters:
+ *       - in: header
+ *         name: Host
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: goldchopsticks.localhost:5000
+ *         description: Restaurant subdomain for context
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Menu item ID
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Menu item deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Menu item deleted successfully"
+ *       400:
+ *         description: Restaurant context required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden - Restaurant admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Menu item not found or doesn't belong to this restaurant
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+
 // Configure multer for image uploads
 console.log('📋 Loading menu routes...');
 console.log('📋 StorageService available:', typeof storageService);
