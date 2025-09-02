@@ -1,6 +1,6 @@
 const express = require('express');
 const { Order, OrderItem, MenuItem, User, ComboType } = require('../config/database');
-const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware, restaurantAdminMiddleware } = require('../middleware/auth');
 const { requireRestaurantContext } = require('../middleware/restaurantContext'); // Multi-tenant support
 const { Op } = require('sequelize');
 const emailService = require('../services/emailService');
@@ -210,7 +210,15 @@ router.post('/', requireRestaurantContext, async (req, res) => {
       // Could optionally add a flag to the order to indicate email failed
     }
 
-    res.status(201).json(completeOrder);
+    res.status(201).json({
+      message: 'Order created successfully',
+      restaurant: {
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
+      },
+      order: completeOrder
+    });
 
   } catch (error) {
     console.error('Create order error:', error);
@@ -220,20 +228,35 @@ router.post('/', requireRestaurantContext, async (req, res) => {
 
 // @route   GET /api/orders/user/:userId
 // @desc    Get user's order history
-// @access  Private
-router.get('/user/:userId', authMiddleware, async (req, res) => {
+// @access  Private (requires restaurant context)
+router.get('/user/:userId', requireRestaurantContext, authMiddleware, async (req, res) => {
   try {
     const { userId } = req.params;
 
     console.log(userId);
 
     // Check if user is accessing their own orders or is admin
-    if (req.user.id !== parseInt(userId) && !req.user.isAdmin) {
+    if (req.user.id !== parseInt(userId) && !req.user.isRestaurantAdmin()) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Verify user belongs to current restaurant (security check)
+    const targetUser = await User.findOne({
+      where: {
+        id: userId,
+        restaurantId: req.restaurantId
+      }
+    });
+    
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found in this restaurant' });
+    }
+
     const orders = await Order.findAll({
-      where: { userId },
+      where: { 
+        userId,
+        restaurantId: req.restaurantId // Filter by current restaurant
+      },
       include: [{
         model: OrderItem,
         as: 'items',
@@ -255,12 +278,16 @@ router.get('/user/:userId', authMiddleware, async (req, res) => {
 
 // @route   GET /api/orders/:id
 // @desc    Get specific order
-// @access  Private
-router.get('/:id', authMiddleware, async (req, res) => {
+// @access  Private (requires restaurant context)
+router.get('/:id', requireRestaurantContext, authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = await Order.findByPk(id, {
+    const order = await Order.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId // Ensure order belongs to current restaurant
+      },
       include: [
         {
           model: OrderItem,
@@ -283,7 +310,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     }
 
     // Check if user can access this order
-    if (!req.user.isAdmin && order.userId !== req.user.id) {
+    if (!req.user.isRestaurantAdmin() && order.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -297,8 +324,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 // @route   PUT /api/orders/:id/status
 // @desc    Update order status
-// @access  Private (Admin)
-router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.put('/:id/status', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -308,7 +335,12 @@ router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Valid status is required' });
     }
 
-    const order = await Order.findByPk(id);
+    const order = await Order.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId // Ensure order belongs to current restaurant
+      }
+    });
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
@@ -327,9 +359,9 @@ router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 // @route   GET /api/orders/admin
-// @desc    Get all orders with filters (admin only)
-// @access  Private (Admin)
-router.get('/admin/all', authMiddleware, adminMiddleware, async (req, res) => {
+// @desc    Get all orders with filters (restaurant admin only)
+// @access  Private (Restaurant Admin)
+router.get('/admin/all', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const {
       status,
@@ -343,7 +375,9 @@ router.get('/admin/all', authMiddleware, adminMiddleware, async (req, res) => {
     } = req.query;
 
     // Build where clause
-    const where = {};
+    const where = {
+      restaurantId: req.restaurantId // Filter by current restaurant
+    };
     
     if (status) where.status = status;
     if (orderType) where.orderType = orderType;
@@ -389,6 +423,11 @@ router.get('/admin/all', authMiddleware, adminMiddleware, async (req, res) => {
     });
 
     res.json({
+      restaurant: {
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
+      },
       orders,
       pagination: {
         total,
@@ -405,13 +444,15 @@ router.get('/admin/all', authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 // @route   GET /api/orders/admin/stats
-// @desc    Get order statistics (admin only)
-// @access  Private (Admin)
-router.get('/admin/stats', authMiddleware, adminMiddleware, async (req, res) => {
+// @desc    Get order statistics (restaurant admin only)
+// @access  Private (Restaurant Admin)
+router.get('/admin/stats', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
-    const where = {};
+    const where = {
+      restaurantId: req.restaurantId // Filter by current restaurant
+    };
     if (startDate && endDate) {
       where.createdAt = {
         [Op.between]: [new Date(startDate), new Date(endDate)]
@@ -460,13 +501,24 @@ router.get('/admin/stats', authMiddleware, adminMiddleware, async (req, res) => 
     });
 
     res.json({
-      totalOrders,
-      pendingOrders,
-      completedOrders,
-      totalRevenue: parseFloat(revenueResult?.totalRevenue || 0),
-      paidOrders: parseInt(revenueResult?.paidOrders || 0),
-      orderTypeBreakdown: orderTypeStats,
-      paymentMethodBreakdown: paymentMethodStats
+      restaurant: {
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
+      },
+      statistics: {
+        totalOrders,
+        pendingOrders,
+        completedOrders,
+        totalRevenue: parseFloat(revenueResult?.totalRevenue || 0),
+        paidOrders: parseInt(revenueResult?.paidOrders || 0),
+        orderTypeBreakdown: orderTypeStats,
+        paymentMethodBreakdown: paymentMethodStats
+      },
+      dateRange: {
+        startDate: req.query.startDate || null,
+        endDate: req.query.endDate || null
+      }
     });
 
   } catch (error) {
@@ -478,17 +530,22 @@ router.get('/admin/stats', authMiddleware, adminMiddleware, async (req, res) => 
 // @route   DELETE /api/orders/:id
 // @desc    Cancel/Delete order
 // @access  Private (Admin or Order Owner)
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', requireRestaurantContext, authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = await Order.findByPk(id);
+    const order = await Order.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId // Ensure order belongs to current restaurant
+      }
+    });
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
     // Check permissions
-    if (!req.user.isAdmin && order.userId !== req.user.id) {
+    if (!req.user.isRestaurantAdmin() && order.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -518,8 +575,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
 // @route   GET /api/orders/search
 // @desc    Search orders by order number or customer info
-// @access  Private (Admin)
-router.get('/admin/search', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.get('/admin/search', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { q } = req.query;
 
@@ -529,6 +586,7 @@ router.get('/admin/search', authMiddleware, adminMiddleware, async (req, res) =>
 
     const orders = await Order.findAll({
       where: {
+        restaurantId: req.restaurantId, // Filter by current restaurant
         [Op.or]: [
           { orderNumber: { [Op.iLike]: `%${q}%` } },
           { customerEmail: { [Op.iLike]: `%${q}%` } },

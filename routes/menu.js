@@ -1,6 +1,6 @@
 const express = require('express');
 const { MenuCategory, MenuItem, sequelize } = require('../config/database'); // Added sequelize import
-const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware, restaurantAdminMiddleware } = require('../middleware/auth');
 const { requireRestaurantContext } = require('../middleware/restaurantContext'); // Multi-tenant support
 const storageService = require('../services/storageService');
 const router = express.Router();
@@ -91,7 +91,15 @@ router.get('/', requireRestaurantContext, async (req, res) => {
     console.log(`Found ${items.length} menu items for ${req.restaurant.name}`);
     
     const organizedMenu = organizeMenuByCategory(items);
-    res.json(organizedMenu);
+    res.json({
+      restaurant: {
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
+      },
+      menu: organizedMenu,
+      itemCount: items.length
+    });
 
   } catch (error) {
     console.error('Get menu error:', error);
@@ -101,14 +109,21 @@ router.get('/', requireRestaurantContext, async (req, res) => {
 });
 
 // @route   GET /api/menu/all
-// @desc    Get all menu items including unavailable (admin only)
-// @access  Private (Admin)
-router.get('/all', authMiddleware, adminMiddleware, async (req, res) => {
+// @desc    Get all menu items including unavailable (restaurant admin only)
+// @access  Private (Restaurant Admin)
+router.get('/all', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const items = await MenuItem.findAll({
+      where: {
+        restaurantId: req.restaurantId // Filter by current restaurant
+      },
       include: [{
         model: MenuCategory,
-        as: 'category'
+        as: 'category',
+        where: {
+          restaurantId: req.restaurantId // Ensure category belongs to same restaurant
+        },
+        required: false
       }],
       order: [['categoryId', 'ASC'], ['displayOrder', 'ASC'], ['name', 'ASC']]
     });
@@ -136,7 +151,15 @@ router.get('/categories', requireRestaurantContext, async (req, res) => {
     });
     
     console.log(`Found ${categories.length} categories for ${req.restaurant.name}`);
-    res.json(categories);
+    res.json({
+      restaurant: {
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
+      },
+      categories: categories,
+      categoryCount: categories.length
+    });
   } catch (error) {
     console.error('Get categories error:', error);
     res.status(500).json({ message: 'Failed to fetch categories' });
@@ -144,11 +167,14 @@ router.get('/categories', requireRestaurantContext, async (req, res) => {
 });
 
 // @route   GET /api/menu/categories/all
-// @desc    Get all menu categories including inactive (admin only)
-// @access  Private (Admin)
-router.get('/categories/all', authMiddleware, adminMiddleware, async (req, res) => {
+// @desc    Get all menu categories including inactive (restaurant admin only)
+// @access  Private (Restaurant Admin)
+router.get('/categories/all', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const categories = await MenuCategory.findAll({
+      where: {
+        restaurantId: req.restaurantId // Filter by current restaurant
+      },
       order: [['displayOrder', 'ASC']]
     });
     
@@ -161,20 +187,24 @@ router.get('/categories/all', authMiddleware, adminMiddleware, async (req, res) 
 
 // @route   GET /api/menu/category/:categoryId
 // @desc    Get menu items by category
-// @access  Public
-router.get('/category/:categoryId', async (req, res) => {
+// @access  Public (requires restaurant context)
+router.get('/category/:categoryId', requireRestaurantContext, async (req, res) => {
   try {
     const { categoryId } = req.params;
     
     const items = await MenuItem.findAll({
       where: { 
         categoryId: categoryId,
-        isAvailable: true 
+        isAvailable: true,
+        restaurantId: req.restaurantId // Filter by current restaurant
       },
       include: [{
         model: MenuCategory,
         as: 'category',
-        where: { isActive: true }
+        where: { 
+          isActive: true,
+          restaurantId: req.restaurantId // Ensure category belongs to same restaurant
+        }
       }],
       order: [['displayOrder', 'ASC'], ['name', 'ASC']]
     });
@@ -211,12 +241,16 @@ router.get('/storage-status', authMiddleware, adminMiddleware, (req, res) => {
 
 // @route   GET /api/menu/:id
 // @desc    Get single menu item
-// @access  Public
-router.get('/:id', async (req, res) => {
+// @access  Public (requires restaurant context)
+router.get('/:id', requireRestaurantContext, async (req, res) => {
   try {
     const { id } = req.params;
     
-    const item = await MenuItem.findByPk(id, {
+    const item = await MenuItem.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId // Ensure item belongs to current restaurant
+      },
       include: [{
         model: MenuCategory,
         as: 'category'
@@ -278,7 +312,15 @@ router.post('/', requireRestaurantContext, authMiddleware, adminMiddleware, asyn
     });
 
     console.log(`Created menu item "${name}" for ${req.restaurant.name}`);
-    res.status(201).json(createdItem);
+    res.status(201).json({
+      message: 'Menu item created successfully',
+      restaurant: {
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
+      },
+      menuItem: createdItem
+    });
   } catch (error) {
     console.error('Create menu item error:', error);
     res.status(500).json({ message: 'Failed to create menu item' });
@@ -287,15 +329,20 @@ router.post('/', requireRestaurantContext, authMiddleware, adminMiddleware, asyn
 
 // @route   PUT /api/menu/:id
 // @desc    Update menu item
-// @access  Private (Admin)
-router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.put('/:id', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { categoryId, name, description, price, isSpicy, isAvailable, displayOrder } = req.body;
 
-    const item = await MenuItem.findByPk(id);
+    const item = await MenuItem.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId // Ensure item belongs to current restaurant
+      }
+    });
     if (!item) {
-      return res.status(404).json({ message: 'Menu item not found' });
+      return res.status(404).json({ message: 'Menu item not found or does not belong to this restaurant' });
     }
 
     // Update fields
@@ -327,14 +374,19 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
 
 // @route   DELETE /api/menu/:id
 // @desc    Delete menu item
-// @access  Private (Admin)
-router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.delete('/:id', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const item = await MenuItem.findByPk(id);
+    const item = await MenuItem.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId // Ensure item belongs to current restaurant
+      }
+    });
     if (!item) {
-      return res.status(404).json({ message: 'Menu item not found' });
+      return res.status(404).json({ message: 'Menu item not found or does not belong to this restaurant' });
     }
 
     await item.destroy();
@@ -347,8 +399,8 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
 
 // @route   POST /api/menu/categories
 // @desc    Create new menu category
-// @access  Private (Admin)
-router.post('/categories', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.post('/categories', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { name, displayOrder } = req.body;
 
@@ -357,6 +409,7 @@ router.post('/categories', authMiddleware, adminMiddleware, async (req, res) => 
     }
 
     const category = await MenuCategory.create({
+      restaurantId: req.restaurantId, // Assign to current restaurant
       name,
       displayOrder: displayOrder || 0
     });
@@ -370,15 +423,20 @@ router.post('/categories', authMiddleware, adminMiddleware, async (req, res) => 
 
 // @route   PUT /api/menu/categories/:id
 // @desc    Update menu category
-// @access  Private (Admin)
-router.put('/categories/:id', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.put('/categories/:id', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, displayOrder, isActive } = req.body;
 
-    const category = await MenuCategory.findByPk(id);
+    const category = await MenuCategory.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId // Ensure category belongs to current restaurant
+      }
+    });
     if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
+      return res.status(404).json({ message: 'Category not found or does not belong to this restaurant' });
     }
 
     const updateData = {};
@@ -396,18 +454,28 @@ router.put('/categories/:id', authMiddleware, adminMiddleware, async (req, res) 
 
 // @route   DELETE /api/menu/categories/:id
 // @desc    Delete menu category
-// @access  Private (Admin)
-router.delete('/categories/:id', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.delete('/categories/:id', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const category = await MenuCategory.findByPk(id);
+    const category = await MenuCategory.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId // Ensure category belongs to current restaurant
+      }
+    });
     if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
+      return res.status(404).json({ message: 'Category not found or does not belong to this restaurant' });
     }
 
-    // Check if category has menu items
-    const itemCount = await MenuItem.count({ where: { categoryId: id } });
+    // Check if category has menu items (only count items from this restaurant)
+    const itemCount = await MenuItem.count({ 
+      where: { 
+        categoryId: id,
+        restaurantId: req.restaurantId
+      } 
+    });
     if (itemCount > 0) {
       return res.status(400).json({ 
         message: `Cannot delete category with ${itemCount} menu items. Please move or delete the items first.` 
@@ -424,8 +492,8 @@ router.delete('/categories/:id', authMiddleware, adminMiddleware, async (req, re
 
 // @route   POST /api/menu/:id/image
 // @desc    Upload image for menu item
-// @access  Private (Admin)
-router.post('/:id/image', authMiddleware, adminMiddleware, (req, res, next) => {
+// @access  Private (Restaurant Admin)
+router.post('/:id/image', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, (req, res, next) => {
   console.log('📤 Image upload request received for item ID:', req.params.id);
   console.log('📤 Storage service available:', storageService.isAvailable());
   
@@ -462,12 +530,17 @@ router.post('/:id/image', authMiddleware, adminMiddleware, (req, res, next) => {
     }
     console.log('☁️ Storage service is available');
 
-    // Find the menu item
+    // Find the menu item (ensure it belongs to current restaurant)
     console.log('🔍 Looking for menu item with ID:', id);
-    const menuItem = await MenuItem.findByPk(id);
+    const menuItem = await MenuItem.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId
+      }
+    });
     if (!menuItem) {
       console.log('❌ Menu item not found with ID:', id);
-      return res.status(404).json({ message: 'Menu item not found' });
+      return res.status(404).json({ message: 'Menu item not found or does not belong to this restaurant' });
     }
     console.log('✅ Menu item found:', menuItem.name);
 
@@ -534,15 +607,20 @@ router.post('/:id/image', authMiddleware, adminMiddleware, (req, res, next) => {
 
 // @route   DELETE /api/menu/:id/image
 // @desc    Delete image for menu item
-// @access  Private (Admin)
-router.delete('/:id/image', authMiddleware, adminMiddleware, async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.delete('/:id/image', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the menu item
-    const menuItem = await MenuItem.findByPk(id);
+    // Find the menu item (ensure it belongs to current restaurant)
+    const menuItem = await MenuItem.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId
+      }
+    });
     if (!menuItem) {
-      return res.status(404).json({ message: 'Menu item not found' });
+      return res.status(404).json({ message: 'Menu item not found or does not belong to this restaurant' });
     }
 
     if (!menuItem.imageUrl) {
@@ -587,15 +665,20 @@ router.delete('/:id/image', authMiddleware, adminMiddleware, async (req, res) =>
 
 // @route   PUT /api/menu/:id
 // @desc    Update menu item (modified to handle image uploads)
-// @access  Private (Admin)
-router.put('/:id/with-image', authMiddleware, adminMiddleware, upload.single('image'), async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.put('/:id/with-image', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, upload.single('image'), async (req, res) => {
   try {
     const { id } = req.params;
     const { categoryId, name, description, price, isSpicy, isAvailable, displayOrder } = req.body;
 
-    const item = await MenuItem.findByPk(id);
+    const item = await MenuItem.findOne({
+      where: {
+        id: id,
+        restaurantId: req.restaurantId
+      }
+    });
     if (!item) {
-      return res.status(404).json({ message: 'Menu item not found' });
+      return res.status(404).json({ message: 'Menu item not found or does not belong to this restaurant' });
     }
 
     // Handle image upload if provided
@@ -658,8 +741,8 @@ router.put('/:id/with-image', authMiddleware, adminMiddleware, upload.single('im
 
 // @route   POST /api/menu/with-image
 // @desc    Create new menu item with image
-// @access  Private (Admin)
-router.post('/with-image', authMiddleware, adminMiddleware, upload.single('image'), async (req, res) => {
+// @access  Private (Restaurant Admin)
+router.post('/with-image', requireRestaurantContext, authMiddleware, restaurantAdminMiddleware, upload.single('image'), async (req, res) => {
   try {
     const { categoryId, name, description, price, isSpicy, isAvailable, displayOrder } = req.body;
 
@@ -668,10 +751,15 @@ router.post('/with-image', authMiddleware, adminMiddleware, upload.single('image
       return res.status(400).json({ message: 'Category, name, and price are required' });
     }
 
-    // Check if category exists
-    const category = await MenuCategory.findByPk(categoryId);
+    // Check if category exists and belongs to current restaurant
+    const category = await MenuCategory.findOne({
+      where: {
+        id: categoryId,
+        restaurantId: req.restaurantId
+      }
+    });
     if (!category) {
-      return res.status(400).json({ message: 'Invalid category' });
+      return res.status(400).json({ message: 'Invalid category or category does not belong to this restaurant' });
     }
 
     // Handle image upload if provided
@@ -682,6 +770,7 @@ router.post('/with-image', authMiddleware, adminMiddleware, upload.single('image
     }
 
     const item = await MenuItem.create({
+      restaurantId: req.restaurantId, // Assign to current restaurant
       categoryId,
       name,
       description,
