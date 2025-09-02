@@ -58,9 +58,7 @@ router.post('/confirm', async (req, res) => {
     if (!paymentIntentId) {
       return res.status(400).json({ message: 'Payment intent ID is required' });
     }
-
-    // For demo purposes, we'll assume payment is successful
-    // In production, you'd use Stripe webhooks to handle payment confirmation
+    
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
     if (paymentIntent.status === 'succeeded') {

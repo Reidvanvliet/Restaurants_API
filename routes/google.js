@@ -12,7 +12,6 @@ router.get('/place/:placeId', async (req, res) => {
     if (!process.env.GOOGLE_PLACES_API_KEY) {
       console.log('Google Places API key not configured, returning mock data');
 
-    // Return mock data for now (Google Places API integration can be added later)
     const mockPlaceDetails = {
       placeId: placeId,
       name: 'Gold Chopsticks',
@@ -54,8 +53,6 @@ router.get('/place/:placeId', async (req, res) => {
 
     res.json(mockPlaceDetails);
     }
-
-    // TODO: Implement actual Google Places API when ready
     
     const fetch = require('node-fetch');
     const response = await fetch(
@@ -120,16 +117,6 @@ router.get('/autocomplete', async (req, res) => {
     };
 
     res.json(mockSuggestions);
-
-    // TODO: Implement actual autocomplete when ready
-    /*
-    const fetch = require('node-fetch');
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&key=${process.env.GOOGLE_PLACES_API_KEY}&components=country:ca&types=address`
-    );
-    const data = await response.json();
-    res.json(data);
-    */
 
   } catch (error) {
     console.error('Autocomplete error:', error);
