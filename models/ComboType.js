@@ -12,6 +12,15 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false
     },
+    restaurantId: {
+      type: DataTypes.INTEGER,
+      allowNull: false, // Every combo type must belong to a restaurant
+      field: 'restaurant_id',
+      references: {
+        model: 'restaurants',
+        key: 'id'
+      }
+    },
     description: {
       type: DataTypes.TEXT,
       allowNull: true

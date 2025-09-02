@@ -8,6 +8,15 @@ module.exports = (sequelize) => {
       primaryKey: true,
       autoIncrement: true
     },
+    restaurantId: {
+      type: DataTypes.INTEGER,
+      allowNull: false, // Every menu item must belong to a restaurant
+      field: 'restaurant_id',
+      references: {
+        model: 'restaurants',
+        key: 'id'
+      }
+    },
     categoryId: {
       type: DataTypes.INTEGER,
       allowNull: false,

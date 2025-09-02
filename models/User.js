@@ -50,6 +50,15 @@ module.exports = (sequelize) => {
       allowNull: true, // 'google' or 'facebook' for OAuth users
       field: 'third_party_provider'
     },
+    restaurantId: {
+      type: DataTypes.INTEGER,
+      allowNull: false, // Every user must belong to a restaurant
+      field: 'restaurant_id',
+      references: {
+        model: 'restaurants',
+        key: 'id'
+      }
+    },
     isAdmin: {
       type: DataTypes.BOOLEAN,
       defaultValue: false, // Regular users are not admins by default

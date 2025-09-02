@@ -84,10 +84,13 @@ try {
 }
 
 // Import models with error handling
-let User, MenuCategory, MenuItem, Order, OrderItem, ComboType, ComboAvailableItems;
+let Restaurant, User, MenuCategory, MenuItem, Order, OrderItem, ComboType, ComboAvailableItems;
 
 try {
   console.log('📦 Loading models...');
+  Restaurant = require('../models/Restaurant')(sequelize);
+  console.log('✅ Restaurant model loaded');
+  
   User = require('../models/User')(sequelize);
   console.log('✅ User model loaded');
   
@@ -118,6 +121,23 @@ try {
 try {
   console.log('🔗 Setting up model associations...');
   
+  // RESTAURANT ASSOCIATIONS - Restaurant is the parent of all other entities
+  Restaurant.hasMany(User, { foreignKey: 'restaurant_id', as: 'users' });
+  User.belongsTo(Restaurant, { foreignKey: 'restaurant_id', as: 'restaurant' });
+  
+  Restaurant.hasMany(MenuCategory, { foreignKey: 'restaurant_id', as: 'menuCategories' });
+  MenuCategory.belongsTo(Restaurant, { foreignKey: 'restaurant_id', as: 'restaurant' });
+  
+  Restaurant.hasMany(MenuItem, { foreignKey: 'restaurant_id', as: 'menuItems' });
+  MenuItem.belongsTo(Restaurant, { foreignKey: 'restaurant_id', as: 'restaurant' });
+  
+  Restaurant.hasMany(Order, { foreignKey: 'restaurant_id', as: 'orders' });
+  Order.belongsTo(Restaurant, { foreignKey: 'restaurant_id', as: 'restaurant' });
+  
+  Restaurant.hasMany(ComboType, { foreignKey: 'restaurant_id', as: 'comboTypes' });
+  ComboType.belongsTo(Restaurant, { foreignKey: 'restaurant_id', as: 'restaurant' });
+  
+  // EXISTING ASSOCIATIONS - Updated to work within restaurant context
   MenuCategory.hasMany(MenuItem, { foreignKey: 'category_id', as: 'items' });
   MenuItem.belongsTo(MenuCategory, { foreignKey: 'category_id', as: 'category' });
   
@@ -130,7 +150,7 @@ try {
   MenuItem.hasMany(OrderItem, { foreignKey: 'menu_item_id', as: 'orderItems' });
   OrderItem.belongsTo(MenuItem, { foreignKey: 'menu_item_id', as: 'menuItem' });
   
-  // Combo associations
+  // COMBO ASSOCIATIONS - ComboAvailableItems inherits restaurant context through ComboType
   ComboType.hasMany(ComboAvailableItems, { foreignKey: 'combo_type_id', as: 'availableItems' });
   ComboAvailableItems.belongsTo(ComboType, { foreignKey: 'combo_type_id', as: 'comboType' });
   
@@ -266,6 +286,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 module.exports = {
   sequelize,
+  Restaurant,
   User,
   MenuCategory,
   MenuItem,

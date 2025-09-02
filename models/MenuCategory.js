@@ -12,6 +12,15 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false
     },
+    restaurantId: {
+      type: DataTypes.INTEGER,
+      allowNull: false, // Every menu category must belong to a restaurant
+      field: 'restaurant_id',
+      references: {
+        model: 'restaurants',
+        key: 'id'
+      }
+    },
     displayOrder: {
       type: DataTypes.INTEGER,
       defaultValue: 0,
