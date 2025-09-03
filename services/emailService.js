@@ -22,7 +22,7 @@ class EmailService {
       if (hasSMTPCredentials) {
         // Use SMTP configuration (production or custom SMTP server)
         console.log('📧 Using SMTP configuration');
-        this.transporter = nodemailer.createTransporter({
+        this.transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST,
           port: process.env.SMTP_PORT || 587,
           secure: process.env.SMTP_SECURE === 'true',
@@ -34,7 +34,7 @@ class EmailService {
       } else {
         // Fallback to EMAIL credentials (Gmail or other service)
         console.log('📧 Using EMAIL credentials (Gmail service)');
-        this.transporter = nodemailer.createTransporter({
+        this.transporter = nodemailer.createTransport({
           service: 'gmail',
           auth: {
             user: process.env.EMAIL_USER,
