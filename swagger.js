@@ -46,24 +46,20 @@ const options = {
     },
     servers: [
       {
-        url: 'http://goldchopsticks.localhost:5000',
-        description: 'Gold Chopsticks Restaurant (Development)'
-      },
-      {
-        url: 'http://pizzapalace.localhost:5000',
-        description: 'Pizza Palace Restaurant (Development)'
+        url: 'https://restaurants-api-d19o.onrender.com',
+        description: 'Platform Admin (Production)'
       },
       {
         url: 'http://localhost:5000',
         description: 'Platform Admin (Development)'
       },
       {
-        url: 'https://goldchopsticks.yourapi.com',
-        description: 'Gold Chopsticks Restaurant (Production)'
+        url: 'http://goldchopsticks.localhost:5000',
+        description: 'Gold Chopsticks Restaurant (Development)'
       },
       {
-        url: 'https://yourapi.com',
-        description: 'Platform Admin (Production)'
+        url: 'http://pizzapalace.localhost:5000',
+        description: 'Pizza Palace Restaurant (Development)'
       }
     ],
     components: {
