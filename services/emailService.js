@@ -85,7 +85,9 @@ class EmailService {
           ...item,
           isCombo: true,
           displayName: comboData.originalName,
-          comboData: comboData
+          comboData: comboData,
+          quantity: item.quantity,
+          price: item.price
         };
       }
     } catch (e) {
@@ -94,7 +96,9 @@ class EmailService {
     return {
       ...item,
       isCombo: false,
-      displayName: item.itemName
+      displayName: item.itemName,
+      quantity: item.quantity,
+      price: item.price
     };
   }
 
