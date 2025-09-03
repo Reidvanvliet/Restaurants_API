@@ -125,7 +125,7 @@ function extractRestaurantIdentifier(host) {
   }
 
   // Get platform domain from environment
-  const platformDomain = process.env.PLATFORM_DOMAIN || 'yourapi.com';
+  const platformDomain = process.env.PLATFORM_DOMAIN || 'onrender.com';
   
   // Handle platform domain subdomains (e.g., goldchopsticks.yourapi.com)
   if (cleanHost.endsWith(`.${platformDomain}`)) {
