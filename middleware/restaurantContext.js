@@ -220,11 +220,11 @@ const restaurantContext = async (req, res, next) => {
     // Try to extract restaurant identifier from host first (subdomain or custom domain)
     let restaurantIdentifier = extractRestaurantIdentifier(host);
     
-    // If no restaurant context from host, try to extract from Origin header
-    if (!restaurantIdentifier && origin) {
-      restaurantIdentifier = extractRestaurantFromOrigin(origin);
+    // If no restaurant context from host, check for restaurant query parameter
+    if (!restaurantIdentifier) {
+      restaurantIdentifier = req.query.restaurant || req.query.slug;
       if (restaurantIdentifier) {
-        console.log(`🔍 Restaurant identifier extracted from origin: ${restaurantIdentifier} (from ${origin})`);
+        console.log(`🔍 Restaurant identifier from query parameter: ${restaurantIdentifier}`);
       }
     }
     
