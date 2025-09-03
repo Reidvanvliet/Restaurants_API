@@ -127,6 +127,11 @@ function extractRestaurantIdentifier(host) {
   // Get platform domain from environment
   const platformDomain = process.env.PLATFORM_DOMAIN || 'restaurants-api-d19o.onrender.com';
   
+  // Handle exact platform domain match (no restaurant context needed)
+  if (cleanHost === platformDomain) {
+    return null; // No restaurant context for main platform domain
+  }
+  
   // Handle platform domain subdomains (e.g., goldchopsticks.yourapi.com)
   if (cleanHost.endsWith(`.${platformDomain}`)) {
     const subdomain = cleanHost.replace(`.${platformDomain}`, '');
