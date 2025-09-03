@@ -154,23 +154,83 @@ function extractRestaurantIdentifier(host) {
   return null;
 }
 
+// Extract restaurant identifier from Origin header
+function extractRestaurantFromOrigin(origin) {
+  if (!origin) return null;
+
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname;
+
+    // Extract restaurant name from various frontend URL patterns
+    
+    // Pattern: goldchopsticks.netlify.app
+    if (hostname.endsWith('.netlify.app')) {
+      const subdomain = hostname.replace('.netlify.app', '');
+      // Skip common non-restaurant subdomains
+      const systemSubdomains = ['www', 'api', 'admin', 'app', 'dashboard', 'cdn', 'static'];
+      if (!systemSubdomains.includes(subdomain) && subdomain !== 'netlify') {
+        return subdomain;
+      }
+    }
+
+    // Pattern: goldchopsticks.vercel.app
+    if (hostname.endsWith('.vercel.app')) {
+      const subdomain = hostname.replace('.vercel.app', '');
+      const systemSubdomains = ['www', 'api', 'admin', 'app', 'dashboard', 'cdn', 'static'];
+      if (!systemSubdomains.includes(subdomain) && subdomain !== 'vercel') {
+        return subdomain;
+      }
+    }
+
+    // Pattern: goldchopsticks-frontend.netlify.app or similar
+    if (hostname.includes('-') && (hostname.endsWith('.netlify.app') || hostname.endsWith('.vercel.app'))) {
+      const parts = hostname.split('-')[0]; // Take first part before dash
+      if (parts && parts.length > 0) {
+        return parts;
+      }
+    }
+
+    // Custom domains - could be restaurant-specific
+    if (!hostname.includes('localhost') && !hostname.includes('netlify') && !hostname.includes('vercel')) {
+      // For custom domains, you might want to maintain a mapping
+      // For now, return null and rely on other methods
+      return null;
+    }
+
+  } catch (error) {
+    console.log('Error parsing origin URL:', error.message);
+  }
+
+  return null;
+}
+
 // Main restaurant context middleware
 const restaurantContext = async (req, res, next) => {
   try {
     // Extract host from request headers
     const host = req.get('host') || req.get('x-forwarded-host');
+    const origin = req.get('origin') || req.get('referer');
     
     if (!host) {
       console.warn('⚠️ No host header found in request');
       return next(); // Continue without restaurant context
     }
 
-    // Extract restaurant identifier (subdomain or custom domain)
-    const restaurantIdentifier = extractRestaurantIdentifier(host);
+    // Try to extract restaurant identifier from host first (subdomain or custom domain)
+    let restaurantIdentifier = extractRestaurantIdentifier(host);
+    
+    // If no restaurant context from host, try to extract from Origin header
+    if (!restaurantIdentifier && origin) {
+      restaurantIdentifier = extractRestaurantFromOrigin(origin);
+      if (restaurantIdentifier) {
+        console.log(`🔍 Restaurant identifier extracted from origin: ${restaurantIdentifier} (from ${origin})`);
+      }
+    }
     
     if (!restaurantIdentifier) {
       // No restaurant context needed (localhost, www, api, etc.)
-      console.log(`🌐 No restaurant context for host: ${host}`);
+      console.log(`🌐 No restaurant context for host: ${host}, origin: ${origin}`);
       return next();
     }
 
