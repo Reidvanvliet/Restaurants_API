@@ -8,10 +8,27 @@ const express = require('express');
 
 // CORS Configuration - Controls which domains can access the API
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:3000', // Allow requests from React frontend
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Define allowed origins
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      process.env.CLIENT_URL
+    ].filter(Boolean); // Remove undefined values
+    
+    // Check if the origin is allowed
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true, // Allow cookies and authorization headers
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed HTTP methods
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'], // Allowed request headers
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Host'], // Added Host header
   exposedHeaders: ['Content-Length'] // Headers frontend can read from responses
 };
 
