@@ -49,7 +49,7 @@ class EmailService {
     }
   }
 
-  async sendOrderConfirmation(orderData) {
+  async sendOrderConfirmation(orderData, restaurant = null) {
     try {
       // Skip if email service is not configured
       if (!this.transporter) {
@@ -57,12 +57,16 @@ class EmailService {
         return { messageId: 'skipped-no-config' };
       }
 
-      const emailContent = this.generateOrderConfirmationEmail(orderData);
+      // Use restaurant data if provided, otherwise fallback to defaults
+      const restaurantName = restaurant?.name || 'Golden Chopsticks';
+      const restaurantEmail = restaurant?.contactInfo?.email || process.env.EMAIL_FROM || process.env.EMAIL_USER;
+
+      const emailContent = this.generateOrderConfirmationEmail(orderData, restaurant);
       
       const mailOptions = {
-        from: `"Golden Chopsticks" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+        from: `"${restaurantName}" <${restaurantEmail}>`,
         to: orderData.customerEmail,
-        subject: `Order Confirmation #${orderData.id} - Golden Chopsticks`,
+        subject: `Order Confirmation #${orderData.id} - ${restaurantName}`,
         html: emailContent.html,
         text: emailContent.text
       };
@@ -102,7 +106,13 @@ class EmailService {
     };
   }
 
-  generateOrderConfirmationEmail(order) {
+  generateOrderConfirmationEmail(order, restaurant = null) {
+    // Extract restaurant info with fallbacks
+    const restaurantName = restaurant?.name || 'Golden Chopsticks';
+    const restaurantPhone = restaurant?.contactInfo?.phone || '(250) 555-0123';
+    const restaurantEmail = restaurant?.contactInfo?.email || 'orders@goldenchopsticks.ca';
+    const restaurantAddress = restaurant?.contactInfo?.address || '123 Main Street, West Kelowna, BC';
+    const primaryColor = restaurant?.themeColors?.primary || '#f59e0b';
     const formattedDate = new Date(order.created_at).toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -168,11 +178,11 @@ class EmailService {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Order Confirmation - Golden Chopsticks</title>
+      <title>Order Confirmation - ${restaurantName}</title>
     </head>
     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <div style="background: linear-gradient(135deg, #f59e0b, #df920cff); color: black; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-        <h1 style="margin: 0; font-size: 28px;">🥢 Golden Chopsticks</h1>
+      <div style="background: linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd); color: black; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0; font-size: 28px;">🥢 ${restaurantName}</h1>
         <p style="margin: 10px 0 0 0; font-size: 18px;">Order Confirmation</p>
       </div>
       
@@ -232,7 +242,7 @@ class EmailService {
           <h3 style="margin-top: 0; color: #1976d2;">What's Next?</h3>
           ${order.orderType === 'pickup' ? `
             <p><strong>Pickup:</strong> Your order will be ready in 15-20 minutes. We'll call you when it's ready!</p>
-            <p><strong>Location:</strong> 123 Main Street, West Kelowna, BC</p>
+            <p><strong>Location:</strong> ${restaurantAddress}</p>
           ` : `
             <p><strong>Delivery:</strong> Your order will be delivered in 30-45 minutes.</p>
             <p>Our driver will call you when they arrive.</p>
@@ -242,13 +252,13 @@ class EmailService {
         
         <div style="text-align: center; margin: 30px 0;">
           <p style="color: #666; font-size: 14px;">
-            Questions about your order? Call us at <strong>(778) 754-5535</strong>
+            Questions about your order? Call us at <strong>${restaurantPhone}</strong>
           </p>
         </div>
         
         <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
           <p style="margin: 0; color: #666; font-size: 14px;">
-            Thank you for choosing Golden Chopsticks!<br>
+            Thank you for choosing ${restaurantName}!<br>
             We appreciate your business and look forward to serving you again.
           </p>
         </div>
@@ -258,7 +268,7 @@ class EmailService {
     `;
 
     const text = `
-Golden Chopsticks - Order Confirmation
+${restaurantName} - Order Confirmation
 
 Thank you for your order, ${order.customerFirstName}!
 
@@ -282,15 +292,15 @@ ${order.deliveryFee > 0 ? `- Delivery Fee: $${Number(order.deliveryFee).toFixed(
 What's Next?
 ${order.orderType === 'pickup' ? `
 Your order will be ready for pickup in 15-20 minutes. We'll call you when it's ready!
-Location: 123 Main Street, West Kelowna, BC
+Location: ${restaurantAddress}
 ` : `
 Your order will be delivered in 30-45 minutes. Our driver will call you when they arrive.
 `}
 Payment: ${order.paymentStatus === 'paid' ? 'Paid online' : `${order.paymentMethod.replace('_', ' ')} on ${order.orderType}`}
 
-Questions? Call us at (250) 555-0123 or email orders@goldenchopsticks.ca
+Questions? Call us at ${restaurantPhone} or email ${restaurantEmail}
 
-Thank you for choosing Golden Chopsticks!
+Thank you for choosing ${restaurantName}!
     `;
 
     return { html, text };

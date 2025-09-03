@@ -443,7 +443,7 @@ router.post('/', requireRestaurantContext, async (req, res) => {
 
     // Send order confirmation email
     try {
-      await emailService.sendOrderConfirmation(completeOrder);
+      await emailService.sendOrderConfirmation(completeOrder, req.restaurant);
       console.log(`Order confirmation email sent to ${completeOrder.customerEmail}`);
     } catch (emailError) {
       // Log error but don't fail the order creation
