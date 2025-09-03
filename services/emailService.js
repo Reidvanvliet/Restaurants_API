@@ -8,21 +8,21 @@ class EmailService {
 
   initializeTransporter() {
     try {
-      // Check if email credentials are configured
-      const hasCredentials = process.env.NODE_ENV === 'production' 
-        ? (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
-        : (process.env.EMAIL_USER && process.env.EMAIL_PASS);
+      // Check what email credentials are available
+      const hasSMTPCredentials = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
+      const hasEmailCredentials = process.env.EMAIL_USER && process.env.EMAIL_PASS;
 
-      if (!hasCredentials) {
+      if (!hasSMTPCredentials && !hasEmailCredentials) {
         console.warn('⚠️  Email credentials not configured. Email functionality will be disabled.');
         this.transporter = null;
         return;
       }
 
-      // Configure based on environment
-      if (process.env.NODE_ENV === 'production') {
-        // Production email service (e.g., SendGrid, AWS SES, etc.)
-        this.transporter = nodemailer.createTransport({
+      // Prefer SMTP credentials if available, fallback to EMAIL credentials
+      if (hasSMTPCredentials) {
+        // Use SMTP configuration (production or custom SMTP server)
+        console.log('📧 Using SMTP configuration');
+        this.transporter = nodemailer.createTransporter({
           host: process.env.SMTP_HOST,
           port: process.env.SMTP_PORT || 587,
           secure: process.env.SMTP_SECURE === 'true',
@@ -32,8 +32,9 @@ class EmailService {
           }
         });
       } else {
-        // Development - use Gmail or test account
-        this.transporter = nodemailer.createTransport({
+        // Fallback to EMAIL credentials (Gmail or other service)
+        console.log('📧 Using EMAIL credentials (Gmail service)');
+        this.transporter = nodemailer.createTransporter({
           service: 'gmail',
           auth: {
             user: process.env.EMAIL_USER,
