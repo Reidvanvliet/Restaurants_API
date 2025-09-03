@@ -9,7 +9,7 @@ router.get('/place/:placeId', async (req, res) => {
   try {
     const { placeId } = req.params;
 
-    if (!process.env.GOOGLE_PLACES_API_KEY) {
+    if (!process.env.GOOGLE_API_KEY) {
       console.log('Google Places API key not configured, returning mock data');
 
     const mockPlaceDetails = {
@@ -56,7 +56,7 @@ router.get('/place/:placeId', async (req, res) => {
     
     const fetch = require('node-fetch');
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,rating,user_ratings_total,reviews&key=${process.env.GOOGLE_PLACES_API_KEY}`
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,rating,user_ratings_total,reviews&key=${process.env.GOOGLE_API_KEY}`
     );
     const data = await response.json();
     res.json(data);
@@ -79,7 +79,7 @@ router.get('/autocomplete', async (req, res) => {
       return res.json({ predictions: [], status: 'OK' });
     }
 
-    if (!process.env.GOOGLE_PLACES_API_KEY) {
+    if (!process.env.GOOGLE_API_KEY) {
       console.log('Google Places API key not configured, returning mock data');
     }
 
