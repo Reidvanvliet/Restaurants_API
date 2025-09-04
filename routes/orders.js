@@ -1,6 +1,6 @@
 const express = require('express');
 const { Order, OrderItem, MenuItem, User, ComboType } = require('../config/database');
-const { authMiddleware, adminMiddleware, restaurantAdminMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware, restaurantAdminMiddleware, registeredUserMiddleware } = require('../middleware/auth');
 const { requireRestaurantContext } = require('../middleware/restaurantContext'); // Multi-tenant support
 const { Op } = require('sequelize');
 const emailService = require('../services/emailService');
@@ -468,7 +468,7 @@ router.post('/', requireRestaurantContext, async (req, res) => {
 });
 
 // @route   GET /api/orders/user/:userId
-// @desc    Get user's order history
+// @desc    Get user's order history from current restaurant
 // @access  Private (requires restaurant context)
 router.get('/user/:userId', requireRestaurantContext, authMiddleware, async (req, res) => {
   try {
@@ -476,21 +476,9 @@ router.get('/user/:userId', requireRestaurantContext, authMiddleware, async (req
 
     console.log(userId);
 
-    // Check if user is accessing their own orders or is admin
-    if (req.user.id !== parseInt(userId) && !req.user.isRestaurantAdmin()) {
+    // Check if user is accessing their own orders or is admin for this restaurant
+    if (req.user.id !== parseInt(userId) && !req.user.canManageRestaurant(req.restaurantId)) {
       return res.status(403).json({ message: 'Access denied' });
-    }
-
-    // Verify user belongs to current restaurant (security check)
-    const targetUser = await User.findOne({
-      where: {
-        id: userId,
-        restaurantId: req.restaurantId
-      }
-    });
-    
-    if (!targetUser) {
-      return res.status(404).json({ message: 'User not found in this restaurant' });
     }
 
     const orders = await Order.findAll({
@@ -513,6 +501,42 @@ router.get('/user/:userId', requireRestaurantContext, authMiddleware, async (req
 
   } catch (error) {
     console.error('Get user orders error:', error);
+    res.status(500).json({ message: 'Failed to fetch orders' });
+  }
+});
+
+// @route   GET /api/orders/user/:userId/all
+// @desc    Get user's order history from all restaurants
+// @access  Private (authenticated users can access their own orders from all restaurants)
+router.get('/user/:userId/all', authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Users can only access their own orders, admins can access any user's orders
+    if (req.user.id !== parseInt(userId) && !req.user.isSuperAdmin()) {
+      return res.status(403).json({ message: 'Access denied. You can only view your own orders.' });
+    }
+
+    const orders = await Order.findAll({
+      where: { 
+        userId
+        // No restaurant filter - get orders from all restaurants
+      },
+      include: [{
+        model: OrderItem,
+        as: 'items',
+        include: [{
+          model: MenuItem,
+          as: 'menuItem'
+        }]
+      }],
+      order: [['created_at', 'DESC']]
+    });
+
+    res.json(orders);
+
+  } catch (error) {
+    console.error('Get user orders from all restaurants error:', error);
     res.status(500).json({ message: 'Failed to fetch orders' });
   }
 });

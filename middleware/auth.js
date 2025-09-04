@@ -2,7 +2,7 @@
 const jwt = require('jsonwebtoken');
 const { User, Restaurant } = require('../config/database');
 
-// Authentication middleware
+// Authentication middleware - now allows users to access any restaurant
 const authMiddleware = async (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -25,12 +25,7 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ message: 'Token is not valid' });
     }
 
-    // Verify restaurant context if token contains restaurant ID
-    if (decoded.restaurantId && user.restaurantId !== decoded.restaurantId) {
-      console.log(`Token restaurant mismatch: token=${decoded.restaurantId}, user=${user.restaurantId}`);
-      return res.status(401).json({ message: 'Token restaurant context invalid' });
-    }
-
+    // Removed restaurant context validation - users can now access any restaurant
     req.user = user;
     req.tokenRestaurantId = decoded.restaurantId; // Store token's restaurant context
     next();
@@ -65,9 +60,15 @@ const restaurantAdminMiddleware = (req, res, next) => {
     return res.status(400).json({ message: 'Restaurant context required' });
   }
   
+  // Super admins can manage any restaurant
+  if (req.user.isSuperAdmin()) {
+    return next();
+  }
+  
+  // Restaurant admins can only manage their assigned restaurant
   if (!req.user.canManageRestaurant(parseInt(targetRestaurantId))) {
     return res.status(403).json({ 
-      message: 'Access denied. You can only manage your own restaurant.' 
+      message: 'Access denied. Restaurant admins can only manage their assigned restaurant.' 
     });
   }
   
@@ -91,13 +92,9 @@ const optionalAuthMiddleware = async (req, res, next) => {
       });
       
       if (user) {
-        // Verify restaurant context if token contains restaurant ID
-        if (decoded.restaurantId && user.restaurantId !== decoded.restaurantId) {
-          console.log(`Optional auth: Token restaurant mismatch: token=${decoded.restaurantId}, user=${user.restaurantId}`);
-        } else {
-          req.user = user;
-          req.tokenRestaurantId = decoded.restaurantId;
-        }
+        // Users can now access any restaurant - no restaurant context validation
+        req.user = user;
+        req.tokenRestaurantId = decoded.restaurantId;
       }
     }
 
@@ -108,10 +105,20 @@ const optionalAuthMiddleware = async (req, res, next) => {
   }
 };
 
+// Registered user middleware - allows access to any restaurant for viewing
+const registeredUserMiddleware = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+  // Any registered user can access any restaurant for viewing/ordering
+  next();
+};
+
 module.exports = {
   authMiddleware,
   adminMiddleware,
   superAdminMiddleware,
   restaurantAdminMiddleware,
-  optionalAuthMiddleware
+  optionalAuthMiddleware,
+  registeredUserMiddleware
 };
