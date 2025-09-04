@@ -144,16 +144,10 @@ const signup = async (req, res) => {
       return sendError(res, 'Password must be at least 6 characters long');
     }
 
-    // Check if user already exists with this email in ANY restaurant (email should be globally unique)
+    // Check if user already exists with this email (emails are now globally unique but users can access any restaurant)
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
-      if (existingUser.restaurantId === req.restaurantId) {
-        return sendError(res, 'User with this email already exists in this restaurant');
-      } else {
-        // User exists in different restaurant
-        const otherRestaurant = await Restaurant.findByPk(existingUser.restaurantId);
-        return sendError(res, `User with this email is already registered with ${otherRestaurant?.name || 'another restaurant'}`);
-      }
+      return sendError(res, 'User with this email already exists. Please login instead.');
     }
 
     // Create new user for current restaurant (password will be automatically hashed by User model hooks)
@@ -205,11 +199,11 @@ const signin = async (req, res) => {
       return sendError(res, 'Restaurant context required for login. Please access via restaurant subdomain (e.g., goldchopsticks.yourapi.com)');
     }
 
-    // Find user by email and restaurant
+    // Find user by email (allow users to login to any restaurant)
     const user = await User.findOne({ 
       where: { 
-        email,
-        restaurantId: req.restaurantId // User must belong to current restaurant
+        email
+        // Removed restaurantId restriction - users can now login to any restaurant
       },
       include: [{
         model: Restaurant,
@@ -220,27 +214,23 @@ const signin = async (req, res) => {
 
     if (!user) {
       // Don't reveal if email exists for security, but log for debugging
-      console.log(`Login attempt failed: ${email} not found in ${req.restaurant.name}`);
+      console.log(`Login attempt failed: ${email} not found`);
       return sendUnauthorized(res, 'Invalid email or password');
     }
 
     // Verify password using bcrypt comparison
     const isMatch = await user.validatePassword(password);
     if (!isMatch) {
-      console.log(`Login attempt failed: Invalid password for ${email} in ${req.restaurant.name}`);
+      console.log(`Login attempt failed: Invalid password for ${email}`);
       return sendUnauthorized(res, 'Invalid email or password');
     }
 
-    // Double-check user belongs to current restaurant (extra security)
-    if (user.restaurantId !== req.restaurantId) {
-      console.log(`Security warning: User ${email} tried to access ${req.restaurant.name} but belongs to different restaurant`);
-      return sendUnauthorized(res, 'Invalid email or password');
-    }
+    // Users can now login to any restaurant - no restaurant restriction check needed
 
-    // Generate JWT token with restaurant context for authenticated session
-    const token = generateToken(user.id, user.restaurantId);
+    // Generate JWT token with current restaurant context (not user's assigned restaurant)
+    const token = generateToken(user.id, req.restaurantId);
     
-    // Return user data and token
+    // Return user data and token with current restaurant context
     sendSuccess(res, {
       id: user.id,
       email: user.email,
@@ -249,11 +239,13 @@ const signin = async (req, res) => {
       phone: user.phone,
       address: user.address,
       isAdmin: user.isAdmin,
-      restaurantId: user.restaurantId,
+      role: user.role,
+      restaurantId: user.restaurantId, // User's original restaurant (for admin purposes)
+      currentRestaurantId: req.restaurantId, // Current restaurant they're accessing
       restaurant: {
-        id: user.restaurant.id,
-        name: user.restaurant.name,
-        slug: user.restaurant.slug
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
       },
       token
     });
@@ -295,21 +287,17 @@ const handleOAuth = async (provider, token, res, req) => {
       return sendError(res, 'Restaurant context required for OAuth authentication. Please access via restaurant subdomain (e.g., goldchopsticks.yourapi.com)');
     }
 
-    // Check if user exists in this restaurant
+    // Check if user exists (allow login to any restaurant)
     let user = await User.findOne({
       where: {
-        [Op.and]: [
-          {
-            [Op.or]: [
-              { email: transformedUser.email },
-              { 
-                thirdPartyId: transformedUser.thirdPartyId, 
-                thirdPartyProvider: transformedUser.thirdPartyProvider 
-              }
-            ]
-          },
-          { restaurantId: req.restaurantId } // Must belong to current restaurant
+        [Op.or]: [
+          { email: transformedUser.email },
+          { 
+            thirdPartyId: transformedUser.thirdPartyId, 
+            thirdPartyProvider: transformedUser.thirdPartyProvider 
+          }
         ]
+        // Removed restaurant restriction - users can login to any restaurant via OAuth
       },
       include: [{
         model: Restaurant,
@@ -363,13 +351,14 @@ const handleOAuth = async (provider, token, res, req) => {
       });
     }
     
-    const jwtToken = generateToken(user.id, user.restaurantId);
+    const jwtToken = generateToken(user.id, req.restaurantId);
     sendSuccess(res, { 
       ...user.toSafeObject(),
+      currentRestaurantId: req.restaurantId, // Current restaurant they're accessing
       restaurant: {
-        id: user.restaurant.id,
-        name: user.restaurant.name,
-        slug: user.restaurant.slug
+        id: req.restaurant.id,
+        name: req.restaurant.name,
+        slug: req.restaurant.slug
       },
       token: jwtToken 
     });
