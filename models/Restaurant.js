@@ -81,7 +81,7 @@ module.exports = (sequelize) => {
         postCode: null
       }
     },
-    socialMedia: {
+    social: {
       type: DataTypes.JSON,
       allowNull: true,
       field: 'social',
@@ -162,8 +162,8 @@ module.exports = (sequelize) => {
 
   // Get safe restaurant data for API responses (excludes sensitive info)
   Restaurant.prototype.toSafeObject = function() {
-    const { id, name, slug, domain, logo, themeColors, phone, email, address, socialMedia, hours, isActive } = this;
-    return { id, name, slug, domain, logo, themeColors, phone, email, address, socialMedia, hours, isActive };
+    const { id, name, slug, domain, logo, themeColors, phone, email, address, social, hours, isActive } = this;
+    return { id, name, slug, domain, logo, themeColors, phone, email, address, social, hours, isActive };
   };
 
   return Restaurant;

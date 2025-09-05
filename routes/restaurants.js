@@ -58,7 +58,7 @@
  *             hours:
  *               type: string
  *               example: "Mon-Sun 11:00-22:00"
- *             socialMedia:
+ *             social:
  *               type: object
  *         isActive:
  *           type: boolean
@@ -811,11 +811,11 @@ router.delete('/:id', authMiddleware, superAdminMiddleware, async (req, res) => 
 });
 
 // @route   GET /api/restaurants/info
-// @desc    Get current restaurant info (id, name, logo, themeColors, phone, email, address, socialMedia, hours)
+// @desc    Get current restaurant info (id, name, logo, themeColors, phone, email, address, social, hours)
 // @access  Public (requires restaurant context)
 router.get('/info', restaurantContext, requireRestaurantContext, (req, res) => {
   try {
-    const { id, name, logo, themeColors, phone, email, address, socialMedia, hours } = req.restaurant;
+    const { id, name, logo, themeColors, phone, email, address, social, hours } = req.restaurant;
     
     res.json({
       id,
@@ -825,7 +825,7 @@ router.get('/info', restaurantContext, requireRestaurantContext, (req, res) => {
       phone,
       email,
       address,
-      socialMedia,
+      social,
       hours
     });
   } catch (error) {

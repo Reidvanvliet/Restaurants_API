@@ -116,7 +116,7 @@ const options = {
                 email: { type: 'string', example: 'info@goldchopsticks.com' },
                 address: { type: 'string', example: '123 Main St, City, State' },
                 hours: { type: 'string', example: 'Mon-Sun 11:00-22:00' },
-                socialMedia: { type: 'object' }
+                social: { type: 'object' }
               }
             },
             isActive: {

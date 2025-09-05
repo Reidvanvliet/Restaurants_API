@@ -21,7 +21,7 @@ async function refreshRestaurantCache() {
     console.log('🔄 Refreshing restaurant cache...');
     const restaurants = await Restaurant.findAll({
       where: { isActive: true },
-      attributes: ['id', 'name', 'slug', 'domain', 'logo', 'themeColors', 'phone', 'email', 'address', 'socialMedia', 'hours']
+      attributes: ['id', 'name', 'slug', 'domain', 'logo', 'themeColors', 'phone', 'email', 'address', 'social', 'hours']
     });
 
     // Clear existing cache
@@ -81,7 +81,7 @@ async function getRestaurantFromCache(identifier) {
           ],
           isActive: true
         },
-        attributes: ['id', 'name', 'slug', 'domain', 'logo', 'themeColors', 'phone', 'email', 'address', 'socialMedia', 'hours']
+        attributes: ['id', 'name', 'slug', 'domain', 'logo', 'themeColors', 'phone', 'email', 'address', 'social', 'hours']
       });
 
       // Add to cache if found
