@@ -811,18 +811,22 @@ router.delete('/:id', authMiddleware, superAdminMiddleware, async (req, res) => 
 });
 
 // @route   GET /api/restaurants/info
-// @desc    Get current restaurant info (id, name, logo, themeColors, contactInfo)
+// @desc    Get current restaurant info (id, name, logo, themeColors, phone, email, address, socialMedia, hours)
 // @access  Public (requires restaurant context)
 router.get('/info', restaurantContext, requireRestaurantContext, (req, res) => {
   try {
-    const { id, name, logo, themeColors, contactInfo } = req.restaurant;
+    const { id, name, logo, themeColors, phone, email, address, socialMedia, hours } = req.restaurant;
     
     res.json({
       id,
       name,
       logo,
       themeColors,
-      contactInfo
+      phone,
+      email,
+      address,
+      socialMedia,
+      hours
     });
   } catch (error) {
     console.error('Get restaurant info error:', error);

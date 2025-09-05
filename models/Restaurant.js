@@ -55,16 +55,53 @@ module.exports = (sequelize) => {
         text: '#1f2937'         // Dark gray
       }
     },
-    contactInfo: {
-      type: DataTypes.JSON, // Store restaurant contact details
+    phone: {
+      type: DataTypes.STRING,
       allowNull: true,
-      field: 'contact_info',
+      validate: {
+        is: /^[\+]?[1-9][\d]{0,15}$/ // Basic phone number validation
+      }
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      validate: {
+        isEmail: true
+      }
+    },
+    address: {
+      type: DataTypes.JSON,
+      allowNull: true,
       defaultValue: {
-        phone: null,
-        email: null,
-        address: null,
-        hours: null,
-        socialMedia: {}
+        streetNumber: null,
+        streetName: null,
+        unitNumber: null,
+        city: null,
+        province: null,
+        postCode: null
+      }
+    },
+    socialMedia: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      field: 'social_media',
+      defaultValue: {
+        facebook: null,
+        instagram: null,
+        X: null
+      }
+    },
+    hours: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: {
+        monday: null,
+        tuesday: null,
+        wednesday: null,
+        thursday: null,
+        friday: null,
+        saturday: null,
+        sunday: null
       }
     },
     isActive: {
@@ -125,8 +162,8 @@ module.exports = (sequelize) => {
 
   // Get safe restaurant data for API responses (excludes sensitive info)
   Restaurant.prototype.toSafeObject = function() {
-    const { id, name, slug, domain, logo, themeColors, contactInfo, isActive } = this;
-    return { id, name, slug, domain, logo, themeColors, contactInfo, isActive };
+    const { id, name, slug, domain, logo, themeColors, phone, email, address, socialMedia, hours, isActive } = this;
+    return { id, name, slug, domain, logo, themeColors, phone, email, address, socialMedia, hours, isActive };
   };
 
   return Restaurant;
