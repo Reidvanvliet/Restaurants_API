@@ -84,7 +84,7 @@ module.exports = (sequelize) => {
     socialMedia: {
       type: DataTypes.JSON,
       allowNull: true,
-      field: 'social_media',
+      field: 'social',
       defaultValue: {
         facebook: null,
         instagram: null,
