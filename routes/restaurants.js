@@ -483,7 +483,7 @@
 const express = require('express');
 const { Restaurant, User, MenuItem, Order, sequelize } = require('../config/database'); // Added sequelize import
 const { authMiddleware, adminMiddleware, superAdminMiddleware, restaurantAdminMiddleware } = require('../middleware/auth');
-const { addRestaurantToCache, clearRestaurantCache, getRestaurantContextHealth } = require('../middleware/restaurantContext');
+const { addRestaurantToCache, clearRestaurantCache, getRestaurantContextHealth, restaurantContext, requireRestaurantContext } = require('../middleware/restaurantContext');
 const { Op } = require('sequelize');
 const router = express.Router();
 
@@ -807,6 +807,26 @@ router.delete('/:id', authMiddleware, superAdminMiddleware, async (req, res) => 
   } catch (error) {
     console.error('Delete restaurant error:', error);
     res.status(500).json({ message: 'Failed to delete restaurant' });
+  }
+});
+
+// @route   GET /api/restaurants/info
+// @desc    Get current restaurant info (id, name, logo, themeColors, contactInfo)
+// @access  Public (requires restaurant context)
+router.get('/info', restaurantContext, requireRestaurantContext, (req, res) => {
+  try {
+    const { id, name, logo, themeColors, contactInfo } = req.restaurant;
+    
+    res.json({
+      id,
+      name,
+      logo,
+      themeColors,
+      contactInfo
+    });
+  } catch (error) {
+    console.error('Get restaurant info error:', error);
+    res.status(500).json({ message: 'Failed to fetch restaurant information' });
   }
 });
 
