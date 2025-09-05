@@ -485,27 +485,10 @@ try {
 
 // Helper function to organize menu items by category
 const organizeMenuByCategory = (items) => {
-  const categoryMap = {
-    1: 'appetizers',
-    2: 'soup',
-    3: 'chowMein',
-    4: 'friedRice',
-    5: 'chopSuey',
-    6: 'eggFooYoung',
-    7: 'chicken',
-    8: 'beef',
-    9: 'pork',
-    10: 'seafood',
-    11: 'chefSpecialty',
-    12: 'combinations',
-    13: 'sauces',
-    14: 'extras'
-  };
-
   const organized = {};
   
   items.forEach(item => {
-    const categoryKey = categoryMap[item.categoryId] || 'other';
+    const categoryKey = item.categoryId;
     if (!organized[categoryKey]) {
       organized[categoryKey] = [];
     }
@@ -556,6 +539,7 @@ router.get('/', requireRestaurantContext, async (req, res) => {
     console.log(`Found ${items.length} menu items for ${req.restaurant.name}`);
     
     const organizedMenu = organizeMenuByCategory(items);
+    
     res.json({
       restaurant: {
         id: req.restaurant.id,
