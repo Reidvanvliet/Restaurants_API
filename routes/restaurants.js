@@ -810,29 +810,6 @@ router.delete('/:id', authMiddleware, superAdminMiddleware, async (req, res) => 
   }
 });
 
-// @route   GET /api/restaurants/info
-// @desc    Get current restaurant info (id, name, logo, themeColors, phone, email, address, social, hours)
-// @access  Public (requires restaurant context)
-router.get('/info', restaurantContext, requireRestaurantContext, (req, res) => {
-  try {
-    const { id, name, logo, themeColors, phone, email, address, social, hours } = req.restaurant;
-    
-    res.json({
-      id,
-      name,
-      logo,
-      themeColors,
-      phone,
-      email,
-      address,
-      social,
-      hours
-    });
-  } catch (error) {
-    console.error('Get restaurant info error:', error);
-    res.status(500).json({ message: 'Failed to fetch restaurant information' });
-  }
-});
 
 // @route   GET /api/restaurants/context/health
 // @desc    Get restaurant context system health

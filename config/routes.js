@@ -24,6 +24,7 @@ const configureRoutes = (app) => {
   app.use('/api/users', require('../routes/users'));       // User profile management
   app.use('/api/google', require('../routes/google'));     // Google Cloud services integration
   app.use('/api/combos', require('../routes/combos'));     // Combo meal management
+  app.use('/api/restaurant', require('../routes/restaurant-info')); // Public restaurant info (no auth required)
   app.use('/api/restaurants', require('../routes/restaurants')); // Restaurant management (multi-tenant)
 
   // SYSTEM HEALTH CHECK - Used by hosting platforms to verify API is running
